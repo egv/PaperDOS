@@ -1,0 +1,30 @@
+# Build artifacts
+*.elf
+*.bin
+*.pdb
+*.o
+*.d
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ESP-IDF build
+build/
+sdkconfig
+sdkconfig.old
+
+# Node (if using any JS tooling)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
