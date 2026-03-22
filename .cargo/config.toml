@@ -1,0 +1,2 @@
+[alias]
+check-kernel-embedded = "check -p kernel --lib --target riscv32imc-unknown-none-elf"
