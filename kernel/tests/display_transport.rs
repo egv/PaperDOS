@@ -144,7 +144,7 @@ fn display_addressing_init_block_display_transport() {
             RecordedOp::Command(DATA_ENTRY_MODE),
             RecordedOp::Data(vec![0x01]),
             RecordedOp::Command(SET_RAM_X_RANGE),
-            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
+            RecordedOp::Data(vec![0x00, 0x63]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
             RecordedOp::Data(vec![0x00, 0x00, 0xDF, 0x01]),
         ]
