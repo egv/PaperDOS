@@ -1,5 +1,6 @@
 use kernel::display::ssd1677::{
-    emit_addressing_init_block, emit_power_init_block, emit_reset_preamble, AUTO_WRITE_BW_RAM,
+    emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
+    emit_strip_window_and_cursor, AUTO_WRITE_BW_RAM,
     AUTO_WRITE_RED_RAM, BOOSTER_SOFT_START, BORDER_WAVEFORM, DATA_ENTRY_MODE, DEEP_SLEEP,
     DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2, DRIVER_OUTPUT_CONTROL, MASTER_ACTIVATION,
     PANEL_HEIGHT, PANEL_WIDTH, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER,
@@ -147,6 +148,46 @@ fn display_addressing_init_block_display_transport() {
             RecordedOp::Data(vec![0x00, 0x63]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
             RecordedOp::Data(vec![0x00, 0x00, 0xDF, 0x01]),
+        ]
+    );
+}
+
+#[test]
+fn strip_window_cursor_first_strip() {
+    // Strip 0: rows 0..39.  Y window [0x0000, 0x0027], Y cursor 0x0000, X cursor 0x00.
+    let mut transport = RecordingTransport::default();
+
+    emit_strip_window_and_cursor(&mut transport, 0, 40).unwrap();
+
+    assert_eq!(
+        transport.ops,
+        vec![
+            RecordedOp::Command(SET_RAM_Y_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x27, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_X_COUNTER),
+            RecordedOp::Data(vec![0x00]),
+        ]
+    );
+}
+
+#[test]
+fn strip_window_cursor_mid_strip() {
+    // Strip 1: rows 40..79.  Y window [0x0028, 0x004F], Y cursor 0x0028, X cursor 0x00.
+    let mut transport = RecordingTransport::default();
+
+    emit_strip_window_and_cursor(&mut transport, 40, 40).unwrap();
+
+    assert_eq!(
+        transport.ops,
+        vec![
+            RecordedOp::Command(SET_RAM_Y_RANGE),
+            RecordedOp::Data(vec![0x28, 0x00, 0x4F, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0x28, 0x00]),
+            RecordedOp::Command(SET_RAM_X_COUNTER),
+            RecordedOp::Data(vec![0x00]),
         ]
     );
 }

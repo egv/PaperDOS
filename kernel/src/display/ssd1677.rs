@@ -119,6 +119,41 @@ where
     Ok(())
 }
 
+/// Set the Y RAM window and reset both address counters for one strip write.
+///
+/// `row_start` — first row of the strip (0-based).
+/// `row_count` — number of rows in the strip.
+///
+/// Issues `SET_RAM_Y_RANGE`, `SET_RAM_Y_COUNTER`, and `SET_RAM_X_COUNTER` in that
+/// order, leaving the controller ready to accept strip pixel data.
+pub fn emit_strip_window_and_cursor<T>(
+    transport: &mut T,
+    row_start: u16,
+    row_count: u16,
+) -> Result<(), T::Error>
+where
+    T: DisplayTransport,
+{
+    let row_end = row_start + row_count - 1;
+    write_command_with_data(
+        transport,
+        SET_RAM_Y_RANGE,
+        &[
+            row_start as u8,
+            (row_start >> 8) as u8,
+            row_end as u8,
+            (row_end >> 8) as u8,
+        ],
+    )?;
+    write_command_with_data(
+        transport,
+        SET_RAM_Y_COUNTER,
+        &[row_start as u8, (row_start >> 8) as u8],
+    )?;
+    write_command_with_data(transport, SET_RAM_X_COUNTER, &[0x00])?;
+    Ok(())
+}
+
 fn write_command_with_data<T>(transport: &mut T, command: u8, data: &[u8]) -> Result<(), T::Error>
 where
     T: DisplayTransport,
