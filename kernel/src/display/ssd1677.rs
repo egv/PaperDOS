@@ -61,6 +61,11 @@ pub const SET_RAM_Y_COUNTER: u8 = 0x4F;
 /// 7=enable clock, 6=enable analog, 5=load temperature, 4=load LUT,
 /// 3=display update, 2=disable analog, 1=disable clock, 0=reserved → `0b1111_0111`.
 pub const FULL_UPDATE_SEQUENCE: u8 = 0xF7;
+/// `DISPLAY_UPDATE_CTRL2` flag byte that selects the DU (Direct Update) partial-refresh sequence.
+///
+/// Same as [`FULL_UPDATE_SEQUENCE`] but with temperature and LUT reload (bits 5 and 4) cleared,
+/// so the previously loaded waveform LUT is reused without reloading → `0b1100_0111`.
+pub const PARTIAL_UPDATE_SEQUENCE: u8 = 0xC7;
 
 /// Assert hardware reset and wait for the controller to become ready.
 pub fn emit_reset_preamble<T>(transport: &mut T) -> Result<(), T::Error>

@@ -1,5 +1,9 @@
+use crate::display::refresh::NormalizedRegion;
 use crate::display::render::strip_geometry;
-use crate::display::ssd1677::{emit_strip_window_and_cursor, PANEL_HEIGHT, ROW_BYTES, WRITE_RAM_BW};
+use crate::display::ssd1677::{
+    emit_strip_window_and_cursor, PANEL_HEIGHT, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE,
+    SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE, WRITE_RAM_BW,
+};
 use crate::display::transport::DisplayTransport;
 
 /// Write one pre-packed strip through the transport.
@@ -26,6 +30,51 @@ where
         "packed_rows length must equal row_count * ROW_BYTES"
     );
     emit_strip_window_and_cursor(transport, row_start, row_count)?;
+    transport.write_command(WRITE_RAM_BW)?;
+    transport.write_data(packed_rows)?;
+    Ok(())
+}
+
+/// Write a pre-packed partial-update region through the transport.
+///
+/// Sets the X and Y address windows to `region`, resets both counters, then
+/// streams `packed_rows` into BW RAM via `WRITE_RAM_BW`.
+///
+/// `packed_rows` must be exactly
+/// `(region.x_byte_end - region.x_byte_start + 1) * (region.y_end - region.y_start + 1)` bytes.
+pub fn write_partial<T>(
+    transport: &mut T,
+    region: &NormalizedRegion,
+    packed_rows: &[u8],
+) -> Result<(), T::Error>
+where
+    T: DisplayTransport,
+{
+    debug_assert!(
+        region.x_byte_end >= region.x_byte_start,
+        "x_byte_end must be >= x_byte_start"
+    );
+    debug_assert!(region.y_end >= region.y_start, "y_end must be >= y_start");
+    let row_bytes = (region.x_byte_end - region.x_byte_start + 1) as usize;
+    let row_count = (region.y_end - region.y_start + 1) as usize;
+    debug_assert_eq!(
+        packed_rows.len(),
+        row_bytes * row_count,
+        "packed_rows length must equal region row_bytes * row_count"
+    );
+    transport.write_command(SET_RAM_X_RANGE)?;
+    transport.write_data(&[region.x_byte_start, region.x_byte_end])?;
+    transport.write_command(SET_RAM_Y_RANGE)?;
+    transport.write_data(&[
+        region.y_start as u8,
+        (region.y_start >> 8) as u8,
+        region.y_end as u8,
+        (region.y_end >> 8) as u8,
+    ])?;
+    transport.write_command(SET_RAM_X_COUNTER)?;
+    transport.write_data(&[region.x_byte_start])?;
+    transport.write_command(SET_RAM_Y_COUNTER)?;
+    transport.write_data(&[region.y_start as u8, (region.y_start >> 8) as u8])?;
     transport.write_command(WRITE_RAM_BW)?;
     transport.write_data(packed_rows)?;
     Ok(())
