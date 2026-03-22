@@ -1,4 +1,4 @@
-use crate::display::ssd1677::{DISPLAY_UPDATE_CTRL2, MASTER_ACTIVATION};
+use crate::display::ssd1677::{DISPLAY_UPDATE_CTRL2, FULL_UPDATE_SEQUENCE, MASTER_ACTIVATION};
 use crate::display::transport::DisplayTransport;
 
 /// Trigger a full-panel refresh cycle.
@@ -11,7 +11,7 @@ where
     T: DisplayTransport,
 {
     transport.write_command(DISPLAY_UPDATE_CTRL2)?;
-    transport.write_data(&[0xF7])?;
+    transport.write_data(&[FULL_UPDATE_SEQUENCE])?;
     transport.write_command(MASTER_ACTIVATION)?;
     transport.wait_while_busy()?;
     Ok(())

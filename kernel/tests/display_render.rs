@@ -1,40 +1,12 @@
+mod common;
+
+use common::{RecordedOp, RecordingTransport};
 use kernel::display::driver::{clear_screen, write_strip};
 use kernel::display::render::{pack_strip, strip_geometry, StripGeometry};
 use kernel::display::ssd1677::{
     PANEL_HEIGHT, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE,
     STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, WRITE_RAM_BW,
 };
-use kernel::display::transport::DisplayTransport;
-
-#[derive(Debug, Eq, PartialEq)]
-enum RecordedOp {
-    Command(u8),
-    Data(Vec<u8>),
-}
-
-#[derive(Default)]
-struct RecordingTransport {
-    ops: Vec<RecordedOp>,
-}
-
-impl DisplayTransport for RecordingTransport {
-    type Error = ();
-
-    fn reset(&mut self) -> Result<(), ()> {
-        Ok(())
-    }
-    fn wait_while_busy(&mut self) -> Result<(), ()> {
-        Ok(())
-    }
-    fn write_command(&mut self, cmd: u8) -> Result<(), ()> {
-        self.ops.push(RecordedOp::Command(cmd));
-        Ok(())
-    }
-    fn write_data(&mut self, data: &[u8]) -> Result<(), ()> {
-        self.ops.push(RecordedOp::Data(data.to_vec()));
-        Ok(())
-    }
-}
 
 #[test]
 fn strip_geometry_display_render() {
@@ -96,10 +68,10 @@ fn strip_packer_full_row_width() {
 
 #[test]
 fn single_strip_write_emits_window_cursor_then_data() {
-    // Strip at rows 0..0 (1 row), 2 bytes of pre-packed pixel data.
+    // Strip at row 0 (1 row, ROW_BYTES = 100 bytes of pre-packed pixel data).
     // Expected sequence: Y range, Y cursor, X cursor reset, WRITE_RAM_BW + payload.
     let mut transport = RecordingTransport::default();
-    let packed = [0xABu8, 0xCD];
+    let packed = vec![0xA5u8; ROW_BYTES];
 
     write_strip(&mut transport, 0, 1, &packed).unwrap();
 
@@ -113,7 +85,7 @@ fn single_strip_write_emits_window_cursor_then_data() {
             RecordedOp::Command(SET_RAM_X_COUNTER),
             RecordedOp::Data(vec![0x00]),
             RecordedOp::Command(WRITE_RAM_BW),
-            RecordedOp::Data(vec![0xAB, 0xCD]),
+            RecordedOp::Data(vec![0xA5; ROW_BYTES]),
         ]
     );
 }

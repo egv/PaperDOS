@@ -20,6 +20,11 @@ pub fn write_strip<T>(
 where
     T: DisplayTransport,
 {
+    debug_assert_eq!(
+        packed_rows.len(),
+        row_count as usize * ROW_BYTES,
+        "packed_rows length must equal row_count * ROW_BYTES"
+    );
     emit_strip_window_and_cursor(transport, row_start, row_count)?;
     transport.write_command(WRITE_RAM_BW)?;
     transport.write_data(packed_rows)?;
@@ -29,7 +34,7 @@ where
 /// Fill the entire display with a constant byte value by writing all strips in order.
 ///
 /// `fill`      — byte value to broadcast: `0xFF` = white, `0x00` = black.
-/// `strip_buf` — caller-supplied scratch buffer; must be at least `STRIP_BUFFER_BYTES` bytes.
+/// `strip_buf` — caller-supplied scratch buffer; must be at least `STRIP_ROWS * ROW_BYTES` bytes.
 pub fn clear_screen<T>(transport: &mut T, fill: u8, strip_buf: &mut [u8]) -> Result<(), T::Error>
 where
     T: DisplayTransport,

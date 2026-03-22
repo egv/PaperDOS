@@ -1,3 +1,6 @@
+mod common;
+
+use common::{RecordedOp, RecordingTransport};
 use kernel::display::ssd1677::{
     emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
     emit_strip_window_and_cursor, AUTO_WRITE_BW_RAM,
@@ -8,43 +11,6 @@ use kernel::display::ssd1677::{
     WRITE_LUT, WRITE_RAM_BW, WRITE_RAM_RED, WRITE_TEMP, WRITE_VCOM,
 };
 use kernel::display::transport::DisplayTransport;
-
-#[derive(Debug, Eq, PartialEq)]
-enum RecordedOp {
-    Reset,
-    WaitWhileBusy,
-    Command(u8),
-    Data(Vec<u8>),
-}
-
-#[derive(Default)]
-struct RecordingTransport {
-    ops: Vec<RecordedOp>,
-}
-
-impl DisplayTransport for RecordingTransport {
-    type Error = ();
-
-    fn reset(&mut self) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Reset);
-        Ok(())
-    }
-
-    fn wait_while_busy(&mut self) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::WaitWhileBusy);
-        Ok(())
-    }
-
-    fn write_command(&mut self, command: u8) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Command(command));
-        Ok(())
-    }
-
-    fn write_data(&mut self, data: &[u8]) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Data(data.to_vec()));
-        Ok(())
-    }
-}
 
 #[test]
 fn ssd1677_constants_display_transport() {

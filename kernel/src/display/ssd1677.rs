@@ -55,6 +55,12 @@ pub const AUTO_WRITE_RED_RAM: u8 = 0x47;
 pub const SET_RAM_X_COUNTER: u8 = 0x4E;
 /// SSD1677 command: set Y RAM address counter (row units, 2-byte little-endian).
 pub const SET_RAM_Y_COUNTER: u8 = 0x4F;
+/// `DISPLAY_UPDATE_CTRL2` flag byte that selects the full-panel waveform update sequence.
+///
+/// Bit field (SSD1677 datasheet §7.2.17):
+/// 7=enable clock, 6=enable analog, 5=load temperature, 4=load LUT,
+/// 3=display update, 2=disable analog, 1=disable clock, 0=reserved → `0b1111_0111`.
+pub const FULL_UPDATE_SEQUENCE: u8 = 0xF7;
 
 /// Assert hardware reset and wait for the controller to become ready.
 pub fn emit_reset_preamble<T>(transport: &mut T) -> Result<(), T::Error>
@@ -119,10 +125,10 @@ where
     Ok(())
 }
 
-/// Set the Y RAM window and reset both address counters for one strip write.
+/// Set the Y RAM window, set the Y address cursor to `row_start`, and reset the X cursor.
 ///
 /// `row_start` — first row of the strip (0-based).
-/// `row_count` — number of rows in the strip.
+/// `row_count` — number of rows in the strip; must be ≥ 1.
 ///
 /// Issues `SET_RAM_Y_RANGE`, `SET_RAM_Y_COUNTER`, and `SET_RAM_X_COUNTER` in that
 /// order, leaving the controller ready to accept strip pixel data.
@@ -134,6 +140,7 @@ pub fn emit_strip_window_and_cursor<T>(
 where
     T: DisplayTransport,
 {
+    debug_assert!(row_count > 0, "row_count must be at least 1");
     let row_end = row_start + row_count - 1;
     write_command_with_data(
         transport,
