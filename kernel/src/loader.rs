@@ -18,6 +18,10 @@ pub enum LoaderError {
         offset: usize,
         image_len: usize,
     },
+    EntryOffsetOutOfBounds {
+        entry_offset: u32,
+        image_len: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -124,6 +128,14 @@ pub fn prepare_image(
     ensure_region_fit(total_ram, available)?;
 
     let image_size = views.image.len();
+    if header.entry_offset as usize >= image_size {
+        return Err(LoaderError::EntryOffsetOutOfBounds {
+            entry_offset: header.entry_offset,
+            image_len: image_size,
+        }
+        .into());
+    }
+
     region[..image_size].copy_from_slice(views.image);
     zero_bss_tail(region, image_size as u32, header.bss_size)?;
     apply_relocations(&mut region[..image_size], views.reloc_table, load_address)?;

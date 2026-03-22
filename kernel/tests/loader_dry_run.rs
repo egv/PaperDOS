@@ -136,4 +136,17 @@ fn loader_prepare_image_loader_dry_run() {
             available: 11,
         }))
     );
+
+    let mut bad_entry = sample_loader_pdb();
+    bad_entry[0x08..0x0C].copy_from_slice(&8u32.to_le_bytes());
+    let mut region = [0xAAu8; 12];
+    assert_eq!(
+        prepare_image(&bad_entry, &mut region, 0x2000),
+        Err(PrepareImageError::Loader(
+            LoaderError::EntryOffsetOutOfBounds {
+                entry_offset: 8,
+                image_len: 8,
+            }
+        ))
+    );
 }
