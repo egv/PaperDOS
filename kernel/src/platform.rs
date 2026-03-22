@@ -37,12 +37,13 @@ impl<'a> HostStorage<'a> {
 
 impl StorageReader for HostStorage<'_> {
     fn read(&self, path: &str, buffer: &mut [u8]) -> Result<usize, StorageError> {
-        if path != self.path || buffer.len() < self.data.len() {
+        if path != self.path {
             return Err(StorageError::NotFound);
         }
 
-        buffer[..self.data.len()].copy_from_slice(self.data);
-        Ok(self.data.len())
+        let len = buffer.len().min(self.data.len());
+        buffer[..len].copy_from_slice(&self.data[..len]);
+        Ok(len)
     }
 }
 

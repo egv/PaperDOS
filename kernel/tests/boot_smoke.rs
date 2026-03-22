@@ -1,15 +1,16 @@
 use kernel::boot::{boot, AbiMetadata, BootState};
+use kernel::pdb::PDB_HEADER_SIZE;
 use kernel::platform::HostPlatform;
 
 #[test]
 fn boot_smoke() {
-    let platform = HostPlatform::new("/apps/demo.pdb", b"demo", 99);
+    let platform = HostPlatform::new("/apps/demo.pdb", &[0xAA; 300], 99);
 
     assert_eq!(
         boot(&platform.storage, &platform.support, "/apps/demo.pdb"),
         Ok(BootState {
             boot_millis: 99,
-            storage_probe_len: 4,
+            storage_probe_len: PDB_HEADER_SIZE,
             abi: AbiMetadata {
                 abi_version: 1,
                 kernel_version: 1,

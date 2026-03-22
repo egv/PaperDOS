@@ -128,10 +128,10 @@ pub fn prepare_image(
     ensure_region_fit(total_ram, available)?;
 
     let image_size = views.image.len();
-    if header.entry_offset as usize >= image_size {
+    if header.entry_offset >= header.text_size {
         return Err(LoaderError::EntryOffsetOutOfBounds {
             entry_offset: header.entry_offset,
-            image_len: image_size,
+            image_len: header.text_size as usize,
         }
         .into());
     }

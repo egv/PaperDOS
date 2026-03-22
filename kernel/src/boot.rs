@@ -1,4 +1,5 @@
 use crate::abi::PD_ABI_VERSION;
+use crate::pdb::PDB_HEADER_SIZE;
 use crate::platform::{KernelSupport, LogLevel, StorageError, StorageReader};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,7 +20,7 @@ pub fn boot(
     support: &impl KernelSupport,
     probe_path: &str,
 ) -> Result<BootState, StorageError> {
-    let mut probe = [0u8; 256];
+    let mut probe = [0u8; PDB_HEADER_SIZE];
     let storage_probe_len = storage.read(probe_path, &mut probe)?;
 
     support.feed_watchdog();

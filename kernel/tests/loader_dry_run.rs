@@ -32,7 +32,7 @@ fn sample_loader_pdb() -> Vec<u8> {
     bytes[0x00..0x04].copy_from_slice(&0x534F4450u32.to_le_bytes());
     bytes[0x04..0x06].copy_from_slice(&1u16.to_le_bytes());
     bytes[0x06..0x08].copy_from_slice(&1u16.to_le_bytes());
-    bytes[0x08..0x0C].copy_from_slice(&0x04u32.to_le_bytes());
+    bytes[0x08..0x0C].copy_from_slice(&0x00u32.to_le_bytes());
     bytes[0x0C..0x10].copy_from_slice(&4u32.to_le_bytes());
     bytes[0x10..0x14].copy_from_slice(&4u32.to_le_bytes());
     bytes[0x14..0x18].copy_from_slice(&4u32.to_le_bytes());
@@ -117,7 +117,7 @@ fn loader_prepare_image_loader_dry_run() {
     assert_eq!(
         prepare_image(&pdb, &mut region, 0x2000),
         Ok(PreparedImage {
-            entry_offset: 4,
+            entry_offset: 0,
             image_size: 8,
             total_ram: 12,
             min_heap: 0,
@@ -145,7 +145,7 @@ fn loader_prepare_image_loader_dry_run() {
         Err(PrepareImageError::Loader(
             LoaderError::EntryOffsetOutOfBounds {
                 entry_offset: 8,
-                image_len: 8,
+                image_len: 4,
             }
         ))
     );
