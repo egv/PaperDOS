@@ -1,0 +1,16 @@
+name: Host Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - run: cargo test -p kernel
