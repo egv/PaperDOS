@@ -63,8 +63,8 @@ pub const SET_RAM_Y_COUNTER: u8 = 0x4F;
 pub const FULL_UPDATE_SEQUENCE: u8 = 0xF7;
 /// `DISPLAY_UPDATE_CTRL2` flag byte that selects the DU (Direct Update) partial-refresh sequence.
 ///
-/// Skips temperature and LUT reload; only clocks, analog, and display-update bits are set
-/// → `0b1100_0111`.
+/// Same as [`FULL_UPDATE_SEQUENCE`] but with temperature and LUT reload (bits 5 and 4) cleared,
+/// so the previously loaded waveform LUT is reused without reloading → `0b1100_0111`.
 pub const PARTIAL_UPDATE_SEQUENCE: u8 = 0xC7;
 
 /// Assert hardware reset and wait for the controller to become ready.

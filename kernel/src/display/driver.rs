@@ -50,6 +50,11 @@ pub fn write_partial<T>(
 where
     T: DisplayTransport,
 {
+    debug_assert!(
+        region.x_byte_end >= region.x_byte_start,
+        "x_byte_end must be >= x_byte_start"
+    );
+    debug_assert!(region.y_end >= region.y_start, "y_end must be >= y_start");
     let row_bytes = (region.x_byte_end - region.x_byte_start + 1) as usize;
     let row_count = (region.y_end - region.y_start + 1) as usize;
     debug_assert_eq!(

@@ -155,6 +155,26 @@ fn partial_window_write_emits_x_y_window_cursor_then_data() {
 }
 
 #[test]
+fn partial_window_write_encodes_high_row_y_address() {
+    // y_start=300 (0x012C), y_end=301 (0x012D) — both > 255, verifying the high byte
+    // of the 16-bit little-endian Y address is encoded correctly.
+    // 300 = 0x012C → [0x2C, 0x01]; 301 = 0x012D → [0x2D, 0x01]
+    let region = NormalizedRegion {
+        x_byte_start: 0,
+        x_byte_end: 0,
+        y_start: 300,
+        y_end: 301,
+    };
+    let payload = [0xFFu8, 0xFF];
+    let mut transport = RecordingTransport::default();
+
+    write_partial(&mut transport, &region, &payload).unwrap();
+
+    assert_eq!(transport.ops[3], RecordedOp::Data(vec![0x2C, 0x01, 0x2D, 0x01])); // SET_RAM_Y_RANGE
+    assert_eq!(transport.ops[7], RecordedOp::Data(vec![0x2C, 0x01])); // SET_RAM_Y_COUNTER
+}
+
+#[test]
 fn partial_du_trigger_emits_update_ctrl2_with_du_sequence_then_busy_wait() {
     use kernel::display::refresh::trigger_partial_refresh;
     use kernel::display::ssd1677::PARTIAL_UPDATE_SEQUENCE;

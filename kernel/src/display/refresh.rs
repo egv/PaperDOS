@@ -69,7 +69,11 @@ pub struct PartialRefreshCounter {
 
 impl PartialRefreshCounter {
     /// Create a new counter that promotes to full refresh every `threshold` partial updates.
-    pub const fn new(threshold: u32) -> Self {
+    ///
+    /// `threshold` must be at least 1; a value of 0 would cause every partial
+    /// update to immediately promote.
+    pub fn new(threshold: u32) -> Self {
+        debug_assert!(threshold > 0, "threshold must be at least 1");
         Self { count: 0, threshold }
     }
 
