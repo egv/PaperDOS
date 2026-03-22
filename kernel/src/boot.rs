@@ -1,5 +1,5 @@
 use crate::abi::PD_ABI_VERSION;
-use crate::pdb::PDB_HEADER_SIZE;
+use crate::pdb::{parse_fixed_header, validate_header_identity, PDB_HEADER_SIZE};
 use crate::platform::{KernelSupport, LogLevel, StorageError, StorageReader};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +22,12 @@ pub fn boot(
 ) -> Result<BootState, StorageError> {
     let mut probe = [0u8; PDB_HEADER_SIZE];
     let storage_probe_len = storage.read(probe_path, &mut probe)?;
+    if storage_probe_len != PDB_HEADER_SIZE {
+        return Err(StorageError::InvalidData);
+    }
+
+    let header = parse_fixed_header(&probe).map_err(|_| StorageError::InvalidData)?;
+    validate_header_identity(&header).map_err(|_| StorageError::InvalidData)?;
 
     support.feed_watchdog();
     support.log(LogLevel::Info, "boot");

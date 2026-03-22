@@ -3,6 +3,7 @@ use core::cell::Cell;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StorageError {
     NotFound,
+    InvalidData,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

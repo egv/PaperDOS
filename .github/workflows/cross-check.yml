@@ -15,4 +15,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: riscv32imc-unknown-none-elf
-      - run: cargo check -p kernel --lib --target riscv32imc-unknown-none-elf
+      - run: cargo check -p kernel --features device --bin kernel-device --target riscv32imc-unknown-none-elf --release
