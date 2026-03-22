@@ -1,3 +1,5 @@
+use crate::abi::PD_ABI_VERSION;
+
 pub const PDB_MAGIC: u32 = 0x534F4450;
 pub const PDB_FORMAT_VERSION: u16 = 1;
 pub const PDB_HEADER_SIZE: usize = 104;
@@ -11,6 +13,8 @@ pub enum PdbError {
     HeaderTooShort { found: usize },
     BadMagic { found: u32 },
     UnsupportedFormatVersion { found: u16 },
+    UnsupportedAbiVersion { found: u16 },
+    PayloadLengthOverflow,
     PayloadSizeMismatch { expected: usize, found: usize },
     ChecksumMismatch { expected: u32, found: u32 },
 }
@@ -96,12 +100,17 @@ pub fn validate_header_identity(header: &PdbHeader) -> Result<(), PdbError> {
         });
     }
 
+    if header.abi_version != PD_ABI_VERSION as u16 {
+        return Err(PdbError::UnsupportedAbiVersion {
+            found: header.abi_version,
+        });
+    }
+
     Ok(())
 }
 
 pub fn validate_payload_integrity(header: &PdbHeader, bytes: &[u8]) -> Result<(), PdbError> {
-    let expected_payload_len =
-        (header.reloc_count as usize * 4) + header.text_size as usize + header.data_size as usize;
+    let (_, expected_payload_len) = payload_layout(header)?;
 
     let payload = bytes.get(PDB_HEADER_SIZE..).unwrap_or(&[]);
     if payload.len() != expected_payload_len {
@@ -129,12 +138,25 @@ pub fn payload_views<'a>(
     validate_payload_integrity(header, bytes)?;
 
     let payload = &bytes[PDB_HEADER_SIZE..];
-    let reloc_size = header.reloc_count as usize * 4;
+    let (reloc_size, _) = payload_layout(header)?;
 
     Ok(PdbPayloadView {
         reloc_table: &payload[..reloc_size],
         image: &payload[reloc_size..],
     })
+}
+
+fn payload_layout(header: &PdbHeader) -> Result<(usize, usize), PdbError> {
+    let reloc_size = header
+        .reloc_count
+        .checked_mul(4)
+        .ok_or(PdbError::PayloadLengthOverflow)?;
+    let expected_payload_len = reloc_size
+        .checked_add(header.text_size)
+        .and_then(|total| total.checked_add(header.data_size))
+        .ok_or(PdbError::PayloadLengthOverflow)?;
+
+    Ok((reloc_size as usize, expected_payload_len as usize))
 }
 
 fn crc32(bytes: &[u8]) -> u32 {

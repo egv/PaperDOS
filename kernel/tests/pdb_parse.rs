@@ -124,6 +124,14 @@ fn pdb_validate_identity() {
         validate_header_identity(&bad_format_header),
         Err(PdbError::UnsupportedFormatVersion { found: 7 })
     );
+
+    let mut bad_abi = sample_header_bytes();
+    bad_abi[0x06..0x08].copy_from_slice(&2u16.to_le_bytes());
+    let bad_abi_header = parse_fixed_header(&bad_abi).expect("header should still parse");
+    assert_eq!(
+        validate_header_identity(&bad_abi_header),
+        Err(PdbError::UnsupportedAbiVersion { found: 2 })
+    );
 }
 
 #[test]
@@ -152,6 +160,14 @@ fn pdb_validate_payload_integrity() {
             expected: 0x646E2680,
             found: 0x496CC90D,
         })
+    );
+
+    let mut overflow_bytes = sample_header_bytes();
+    overflow_bytes[0x18..0x1C].copy_from_slice(&u32::MAX.to_le_bytes());
+    let overflow_header = parse_fixed_header(&overflow_bytes).expect("header should still parse");
+    assert_eq!(
+        validate_payload_integrity(&overflow_header, &overflow_bytes),
+        Err(PdbError::PayloadLengthOverflow)
     );
 }
 

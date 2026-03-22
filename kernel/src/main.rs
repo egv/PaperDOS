@@ -8,11 +8,8 @@ mod device {
 
     use embassy_executor::Spawner;
     use esp_hal::{
-        clock::CpuClock,
-        interrupt::software::SoftwareInterruptControl,
-        main,
-        timer::timg::TimerGroup,
-        Config,
+        clock::CpuClock, interrupt::software::SoftwareInterruptControl, main,
+        timer::timg::TimerGroup, Config,
     };
     use static_cell::StaticCell;
 
