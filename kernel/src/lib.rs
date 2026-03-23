@@ -2,6 +2,7 @@
 
 pub mod abi;
 pub mod device;
+pub mod input;
 pub mod boot;
 pub mod display;
 pub mod loader;
