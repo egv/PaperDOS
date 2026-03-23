@@ -19,9 +19,12 @@ path = "src/main.rs"
 required-features = ["device"]
 
 [dependencies]
+embedded-hal = "1.0"
+embedded-sdmmc = { version = "0.7", default-features = false }
 
 [target.'cfg(all(target_arch = "riscv32", target_os = "none"))'.dependencies]
 embassy-executor = "0.9.0"
+embedded-hal-bus = "0.3.0"
 esp-hal = { version = "1.0.0", default-features = false, features = ["esp32c3", "rt", "unstable"] }
 esp-rtos = { version = "0.2.0", default-features = false, features = ["esp32c3", "embassy"] }
 static_cell = "2.1.0"

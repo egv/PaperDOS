@@ -6,5 +6,6 @@ pub mod device;
 pub mod display;
 pub mod input;
 pub mod loader;
+pub mod storage;
 pub mod pdb;
 pub mod platform;
