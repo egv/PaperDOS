@@ -7,19 +7,19 @@ use kernel::syscall::fs::{
 #[test]
 fn syscall_table_fs_fields_populated_syscall_fs() {
     let t = build_syscall_table(0, 0);
-    assert_ne!(t.fs_open, 0, "fs_open must be wired");
-    assert_ne!(t.fs_close, 0, "fs_close must be wired");
-    assert_ne!(t.fs_read, 0, "fs_read must be wired");
-    assert_ne!(t.fs_write, 0, "fs_write must be wired");
-    assert_ne!(t.fs_seek, 0, "fs_seek must be wired");
-    assert_ne!(t.fs_tell, 0, "fs_tell must be wired");
-    assert_ne!(t.fs_eof, 0, "fs_eof must be wired");
-    assert_ne!(t.fs_mkdir, 0, "fs_mkdir must be wired");
-    assert_ne!(t.fs_remove, 0, "fs_remove must be wired");
-    assert_ne!(t.fs_opendir, 0, "fs_opendir must be wired");
-    assert_ne!(t.fs_readdir, 0, "fs_readdir must be wired");
-    assert_ne!(t.fs_closedir, 0, "fs_closedir must be wired");
-    assert_ne!(t.fs_stat, 0, "fs_stat must be wired");
+    assert_eq!(t.fs_open, pd_fs_open as usize as u32);
+    assert_eq!(t.fs_close, pd_fs_close as usize as u32);
+    assert_eq!(t.fs_read, pd_fs_read as usize as u32);
+    assert_eq!(t.fs_write, pd_fs_write as usize as u32);
+    assert_eq!(t.fs_seek, pd_fs_seek as usize as u32);
+    assert_eq!(t.fs_tell, pd_fs_tell as usize as u32);
+    assert_eq!(t.fs_eof, pd_fs_eof as usize as u32);
+    assert_eq!(t.fs_mkdir, pd_fs_mkdir as usize as u32);
+    assert_eq!(t.fs_remove, pd_fs_remove as usize as u32);
+    assert_eq!(t.fs_opendir, pd_fs_opendir as usize as u32);
+    assert_eq!(t.fs_readdir, pd_fs_readdir as usize as u32);
+    assert_eq!(t.fs_closedir, pd_fs_closedir as usize as u32);
+    assert_eq!(t.fs_stat, pd_fs_stat as usize as u32);
 }
 
 #[test]

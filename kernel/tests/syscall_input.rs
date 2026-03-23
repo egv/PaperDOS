@@ -30,15 +30,7 @@ fn input_get_battery_pct_returns_minus_one_syscall_input() {
 #[test]
 fn syscall_table_input_fields_populated_syscall_input() {
     let t = build_syscall_table(0, 0);
-    assert_ne!(t.input_get_buttons, 0, "input_get_buttons must be wired");
-    assert_ne!(t.input_wait_button, 0, "input_wait_button must be wired");
-    assert_ne!(t.input_get_battery_pct, 0, "input_get_battery_pct must be wired");
-}
-
-// Verify the extern "C" stubs compile and are non-null function pointers.
-#[test]
-fn input_stub_pointers_are_non_null_syscall_input() {
-    assert_ne!(pd_input_get_buttons as usize, 0);
-    assert_ne!(pd_input_wait_button as usize, 0);
-    assert_ne!(pd_input_get_battery_pct as usize, 0);
+    assert_eq!(t.input_get_buttons, pd_input_get_buttons as usize as u32);
+    assert_eq!(t.input_wait_button, pd_input_wait_button as usize as u32);
+    assert_eq!(t.input_get_battery_pct, pd_input_get_battery_pct as usize as u32);
 }

@@ -5,7 +5,8 @@ use kernel::abi::{PD_SCREEN_HEIGHT, PD_SCREEN_WIDTH};
 use kernel::display::ssd1677::{STRIP_COUNT, WRITE_RAM_BW};
 use kernel::syscall::build_syscall_table;
 use kernel::syscall::display::{
-    FRAME_BYTES, display_clear_to, display_refresh_flush, pd_display_height, pd_display_width,
+    FRAME_BYTES, display_clear_to, display_refresh_flush, pd_display_clear, pd_display_height,
+    pd_display_refresh, pd_display_width,
 };
 
 #[test]
@@ -42,8 +43,8 @@ fn display_height_returns_panel_height_syscall_display() {
 #[test]
 fn syscall_table_display_fields_populated_syscall_display() {
     let t = build_syscall_table(0, 0);
-    assert_ne!(t.display_clear, 0, "display_clear must be wired");
-    assert_ne!(t.display_refresh, 0, "display_refresh must be wired");
-    assert_ne!(t.display_width, 0, "display_width must be wired");
-    assert_ne!(t.display_height, 0, "display_height must be wired");
+    assert_eq!(t.display_clear, pd_display_clear as usize as u32);
+    assert_eq!(t.display_refresh, pd_display_refresh as usize as u32);
+    assert_eq!(t.display_width, pd_display_width as usize as u32);
+    assert_eq!(t.display_height, pd_display_height as usize as u32);
 }
