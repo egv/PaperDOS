@@ -91,22 +91,28 @@ mod imp {
 
         fn reset(&mut self) -> Result<(), ()> {
             self.rst.set_low();
-            // ~20 ms reset pulse at 80 MHz CPU clock.
-            for _ in 0u32..1_600_000 {
-                core::hint::spin_loop();
-            }
+            // 10 ms reset pulse per SSD1677 datasheet minimum (t_res ≥ 10 ms).
+            esp_hal::delay::Delay::new().delay_millis(10);
             self.rst.set_high();
             Ok(())
         }
 
         fn wait_while_busy(&mut self) -> Result<(), ()> {
-            while self.busy.is_high() {
+            // SSD1677 BUSY is high while the controller is executing a command.
+            // Bound the spin to ~10 s worth of iterations to avoid an infinite loop
+            // in debug builds if the display is absent or misbehaving.
+            for _ in 0u32..800_000_000 {
+                if self.busy.is_low() {
+                    return Ok(());
+                }
                 core::hint::spin_loop();
             }
-            Ok(())
+            Err(())
         }
 
         fn write_command(&mut self, command: u8) -> Result<(), ()> {
+            // DC low selects command mode; SPI CS is asserted by the SpiDmaBus
+            // driver at the start of the transfer, after DC is already stable.
             self.dc.set_low();
             self.spi.write(&[command]).map_err(|_| ())
         }
