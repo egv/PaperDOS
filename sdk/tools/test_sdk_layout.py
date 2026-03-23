@@ -94,6 +94,31 @@ class TestPaperdosHeaderCompiles(unittest.TestCase):
         result = self._compile(src)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_sys_exit_field_position(self):
+        """
+        sys_exit must be preceded by exactly 4 uint32_t metadata fields and
+        39 function-pointer fields (10 display + 3 input + 13 fs + 11 net +
+        2 sys before it).  On riscv32 (4-byte pointers) this resolves to
+        4*4 + 39*4 = 172 = 0xAC, which pd_entry.S hardcodes.
+
+        The algebraic form is used here so the assertion holds on both 32-bit
+        and 64-bit hosts, catching field-order changes on either platform.
+        """
+        src = (
+            '#include <stddef.h>\n'
+            '#include "paperdos.h"\n'
+            '/* 4 metadata uint32s + 39 fn-ptr fields before sys_exit */\n'
+            '_Static_assert(\n'
+            '    offsetof(pd_syscalls_t, sys_exit) ==\n'
+            '        4 * sizeof(uint32_t) + 39 * sizeof(void *),\n'
+            '    "sys_exit field order changed — update pd_entry.S offset 0xAC");\n'
+        )
+        result = self._compile(src)
+        self.assertEqual(
+            result.returncode, 0,
+            f"sys_exit field position mismatch:\n{result.stderr}",
+        )
+
     def test_pd_main_prototype_compiles(self):
         """pd_main() must be declared in the header."""
         src = (
@@ -127,11 +152,10 @@ class TestPdEntryAssembly(unittest.TestCase):
         self.src = ENTRY_PATH.read_text()
 
     def test_sys_exit_offset_is_0xac(self):
-        """sys_exit must be loaded from offset 0xAC of the syscall table."""
-        self.assertIn(
-            "0xAC",
-            self.src,
-            "pd_entry.S must reference sys_exit at syscall-table offset 0xAC",
+        """sys_exit must be loaded via lw from 0xAC(s0) — not just mentioned in a comment."""
+        self.assertTrue(
+            re.search(r"lw\s+\w+,\s*0xAC\(s0\)", self.src),
+            "pd_entry.S must load sys_exit with 'lw <reg>, 0xAC(s0)'",
         )
 
     def test_jalr_used_for_indirect_call(self):

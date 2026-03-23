@@ -103,6 +103,10 @@ class TestBuildPdbSizeFields(unittest.TestCase):
         pdb = _minimal_pdb(relocs=[0x10, 0x20, 0x30])
         self.assertEqual(struct.unpack_from("<I", pdb, 24)[0], 3)
 
+    def test_flags_at_offset_28(self):
+        pdb = _minimal_pdb(flags=3)  # FLAG_NEEDS_WIFI | FLAG_NEEDS_BT
+        self.assertEqual(struct.unpack_from("<i", pdb, 28)[0], 3)
+
 
 class TestBuildPdbStringFields(unittest.TestCase):
     def test_name_at_offset_32_null_padded_to_32_bytes(self):
