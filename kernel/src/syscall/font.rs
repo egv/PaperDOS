@@ -7,7 +7,10 @@
 /// Returns an opaque font ID (≥ 0), or −1 on error.
 ///
 /// Stub: returns −1.
-pub extern "C" fn pd_font_load(_path: *const u8, _len: usize) -> i32 {
+///
+/// # Safety
+/// `path` must point to at least `len` valid bytes.
+pub unsafe extern "C" fn pd_font_load(_path: *const u8, _len: usize) -> i32 {
     -1
 }
 
@@ -19,7 +22,10 @@ pub extern "C" fn pd_font_free(_font_id: i32) {}
 /// Return the pixel width of `text` rendered in `font_id`.
 ///
 /// Stub: returns 0.
-pub extern "C" fn pd_font_text_width(_font_id: i32, _text: *const u8, _len: usize) -> i32 {
+///
+/// # Safety
+/// `text` must point to at least `len` valid bytes.
+pub unsafe extern "C" fn pd_font_text_width(_font_id: i32, _text: *const u8, _len: usize) -> i32 {
     0
 }
 
