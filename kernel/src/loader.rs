@@ -1,3 +1,4 @@
+use crate::abi::PdSyscalls;
 use crate::pdb::{
     parse_fixed_header, payload_views, validate_header_identity, PdbError, PdbHeader,
 };
@@ -111,6 +112,40 @@ pub fn apply_relocations(
         image[offset..end].copy_from_slice(&relocated.to_le_bytes());
     }
 
+    Ok(())
+}
+
+/// Error returned by [`load_and_run`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LoadAndRunError {
+    PrepareImage(PrepareImageError),
+}
+
+impl From<PrepareImageError> for LoadAndRunError {
+    fn from(e: PrepareImageError) -> Self {
+        Self::PrepareImage(e)
+    }
+}
+
+/// Parse and validate `pdb`, copy the image into `region`, apply relocations,
+/// and call `jump_fn` with the resolved entry pointer.
+///
+/// `jump_fn` defaults to [`crate::jump::jump_to_app`] in production; pass
+/// a mock during tests to avoid executing arbitrary bytes on the host.
+///
+/// # Safety
+/// `jump_fn` must be safe to call with the entry pointer derived from `region`
+/// and the provided `syscalls` pointer.
+pub unsafe fn load_and_run(
+    pdb: &[u8],
+    region: &mut [u8],
+    syscalls: *const PdSyscalls,
+    jump_fn: unsafe fn(*const u8, *const PdSyscalls),
+) -> Result<(), LoadAndRunError> {
+    let load_addr = region.as_ptr() as u32;
+    let prepared = prepare_image(pdb, region, load_addr)?;
+    let entry = unsafe { region.as_ptr().add(prepared.entry_offset as usize) };
+    unsafe { jump_fn(entry, syscalls) };
     Ok(())
 }
 

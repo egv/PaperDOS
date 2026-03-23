@@ -16,4 +16,10 @@ pub trait DisplayTransport {
 
     /// Assert DC high (data mode) and transfer `data` bytes over SPI.
     fn write_data(&mut self, data: &[u8]) -> Result<(), Self::Error>;
+
+    /// Busy-wait for at least `ms` milliseconds.
+    ///
+    /// The default implementation is a no-op, suitable for host-side test
+    /// transports.  Device transports must override this with a real delay.
+    fn delay_ms(&mut self, _ms: u32) {}
 }

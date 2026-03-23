@@ -1,8 +1,39 @@
 // ── Filesystem syscall stubs ──────────────────────────────────────────────────
 //
-// Each function has the C ABI signature the app expects. All stubs return -1
-// (error / not-implemented). Device impls will delegate to a global `FsState`
-// via critical-section mutex, wired in a later task.
+// Each function has the C ABI signature the app expects.
+//
+// opendir/readdir/closedir have function-pointer slots so main.rs can wire the
+// real FsState without generics.  All other ops remain -1 stubs for Phase 1.
+
+// ── Directory operation slots ─────────────────────────────────────────────────
+
+static mut OPENDIR_FN: unsafe fn(*const u8, usize) -> i32 = |_, _| -1;
+static mut READDIR_FN: unsafe fn(i32, *mut u8) -> i32 = |_, _| -1;
+static mut CLOSEDIR_FN: fn(i32) -> i32 = |_| -1;
+
+/// Register the opendir callback.
+///
+/// # Safety
+/// Must be called once at init; not concurrency-safe.
+pub unsafe fn set_fs_opendir_fn(f: unsafe fn(*const u8, usize) -> i32) {
+    (&raw mut OPENDIR_FN).write(f);
+}
+
+/// Register the readdir callback.
+///
+/// # Safety
+/// Must be called once at init; not concurrency-safe.
+pub unsafe fn set_fs_readdir_fn(f: unsafe fn(i32, *mut u8) -> i32) {
+    (&raw mut READDIR_FN).write(f);
+}
+
+/// Register the closedir callback.
+///
+/// # Safety
+/// Must be called once at init; not concurrency-safe.
+pub unsafe fn set_fs_closedir_fn(f: fn(i32) -> i32) {
+    (&raw mut CLOSEDIR_FN).write(f);
+}
 
 /// Open a file.
 ///
@@ -92,8 +123,9 @@ pub unsafe extern "C" fn pd_fs_remove(_path: *const u8, _len: usize) -> i32 {
 ///
 /// # Safety
 /// `path` must point to at least `len` valid bytes.
-pub unsafe extern "C" fn pd_fs_opendir(_path: *const u8, _len: usize) -> i32 {
-    -1
+pub unsafe extern "C" fn pd_fs_opendir(path: *const u8, len: usize) -> i32 {
+    // SAFETY: caller guarantees path validity; OPENDIR_FN written once at init.
+    unsafe { (*(&raw const OPENDIR_FN))(path, len) }
 }
 
 /// Read the next entry from an open directory into `dirent_buf`.
@@ -104,15 +136,16 @@ pub unsafe extern "C" fn pd_fs_opendir(_path: *const u8, _len: usize) -> i32 {
 ///
 /// # Safety
 /// `dirent_buf` must be valid for 264 bytes of writes.
-pub unsafe extern "C" fn pd_fs_readdir(_handle: i32, _dirent_buf: *mut u8) -> i32 {
-    -1
+pub unsafe extern "C" fn pd_fs_readdir(handle: i32, dirent_buf: *mut u8) -> i32 {
+    unsafe { (*(&raw const READDIR_FN))(handle, dirent_buf) }
 }
 
 /// Close a directory handle previously returned by [`pd_fs_opendir`].
 ///
 /// Returns 0 on success, −1 on error.
-pub extern "C" fn pd_fs_closedir(_handle: i32) -> i32 {
-    -1
+pub extern "C" fn pd_fs_closedir(handle: i32) -> i32 {
+    // SAFETY: CLOSEDIR_FN written once at init; no concurrent modification.
+    unsafe { (*(&raw const CLOSEDIR_FN))(handle) }
 }
 
 /// Stat a file or directory at `path`, writing a `PdStat` into `stat_buf`.

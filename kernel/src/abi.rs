@@ -3,8 +3,8 @@ pub type PdSyscallFn = u32;
 pub const PD_ABI_VERSION: u32 = 1;
 pub const PD_SDK_VERSION: &str = "0.1.0";
 
-pub const PD_SCREEN_WIDTH: i32 = 800;
-pub const PD_SCREEN_HEIGHT: i32 = 480;
+pub const PD_SCREEN_WIDTH: i32 = 480;
+pub const PD_SCREEN_HEIGHT: i32 = 800;
 
 pub const PD_COLOR_BLACK: u8 = 0x00;
 pub const PD_COLOR_WHITE: u8 = 0xFF;

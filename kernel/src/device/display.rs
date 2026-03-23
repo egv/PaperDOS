@@ -26,10 +26,12 @@ mod imp {
     static RX_DESC: StaticCell<[DmaDescriptor; 2]> = StaticCell::new();
     static TX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
     static RX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
+    const DMA_CHUNK_BYTES: usize = 4096;
 
-    /// SSD1677 display transport backed by DMA-accelerated SPI2 and three GPIO lines.
+    /// SSD1677 display transport backed by DMA-accelerated SPI2 and four GPIO lines.
     pub struct X4DisplayTransport {
         spi: SpiDmaBus<'static, Blocking>,
+        cs: Output<'static>,
         dc: Output<'static>,
         rst: Output<'static>,
         busy: Input<'static>,
@@ -74,15 +76,21 @@ mod imp {
             .unwrap()
             .with_sck(sclk)
             .with_mosi(mosi)
-            .with_cs(cs)
             .with_dma(dma_ch0)
             .with_buffers(rx_buf, tx_buf);
 
+            let cs = Output::new(cs, Level::High, OutputConfig::default());
             let dc = Output::new(dc_pin, Level::High, OutputConfig::default());
             let rst = Output::new(rst_pin, Level::High, OutputConfig::default());
             let busy = Input::new(busy_pin, InputConfig::default());
 
-            Self { spi, dc, rst, busy }
+            Self {
+                spi,
+                cs,
+                dc,
+                rst,
+                busy,
+            }
         }
     }
 
@@ -90,11 +98,20 @@ mod imp {
         type Error = ();
 
         fn reset(&mut self) -> Result<(), ()> {
-            self.rst.set_low();
-            // 10 ms reset pulse per SSD1677 datasheet minimum (t_res ≥ 10 ms).
-            esp_hal::delay::Delay::new().delay_millis(10);
+            // pulp-os reference timing: high 20 ms → low 2 ms → high 20 ms.
+            // A shorter low pulse leaves the SSD1677 in an undefined state.
+            let delay = esp_hal::delay::Delay::new();
             self.rst.set_high();
+            delay.delay_millis(20);
+            self.rst.set_low();
+            delay.delay_millis(2);
+            self.rst.set_high();
+            delay.delay_millis(20);
             Ok(())
+        }
+
+        fn delay_ms(&mut self, ms: u32) {
+            esp_hal::delay::Delay::new().delay_millis(ms);
         }
 
         fn wait_while_busy(&mut self) -> Result<(), ()> {
@@ -111,15 +128,24 @@ mod imp {
         }
 
         fn write_command(&mut self, command: u8) -> Result<(), ()> {
-            // DC low selects command mode; SPI CS is asserted by the SpiDmaBus
-            // driver at the start of the transfer, after DC is already stable.
             self.dc.set_low();
-            self.spi.write(&[command]).map_err(|_| ())
+            self.cs.set_low();
+            let result = self.spi.write(&[command]).map_err(|_| ());
+            self.cs.set_high();
+            result
         }
 
         fn write_data(&mut self, data: &[u8]) -> Result<(), ()> {
             self.dc.set_high();
-            self.spi.write(data).map_err(|_| ())
+            self.cs.set_low();
+            for chunk in data.chunks(DMA_CHUNK_BYTES) {
+                if self.spi.write(chunk).is_err() {
+                    self.cs.set_high();
+                    return Err(());
+                }
+            }
+            self.cs.set_high();
+            Ok(())
         }
     }
 }

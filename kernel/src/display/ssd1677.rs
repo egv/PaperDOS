@@ -43,7 +43,7 @@ pub const WRITE_VCOM: u8 = 0x2C;
 pub const WRITE_LUT: u8 = 0x32;
 /// SSD1677 command: configure border waveform.
 pub const BORDER_WAVEFORM: u8 = 0x3C;
-/// SSD1677 command: set X RAM address window (byte-column units, 2-byte payload).
+/// SSD1677 command: set X RAM address window (pixel units, 4-byte little-endian payload).
 pub const SET_RAM_X_RANGE: u8 = 0x44;
 /// SSD1677 command: set Y RAM address window (row units, 4-byte little-endian payload).
 pub const SET_RAM_Y_RANGE: u8 = 0x45;
@@ -51,7 +51,7 @@ pub const SET_RAM_Y_RANGE: u8 = 0x45;
 pub const AUTO_WRITE_BW_RAM: u8 = 0x46;
 /// SSD1677 command: auto-fill red RAM with a fixed value.
 pub const AUTO_WRITE_RED_RAM: u8 = 0x47;
-/// SSD1677 command: set X RAM address counter (byte-column units).
+/// SSD1677 command: set X RAM address counter (pixel units, 2-byte little-endian).
 pub const SET_RAM_X_COUNTER: u8 = 0x4E;
 /// SSD1677 command: set Y RAM address counter (row units, 2-byte little-endian).
 pub const SET_RAM_Y_COUNTER: u8 = 0x4F;
@@ -67,13 +67,20 @@ pub const FULL_UPDATE_SEQUENCE: u8 = 0xF7;
 /// so the previously loaded waveform LUT is reused without reloading → `0b1100_0111`.
 pub const PARTIAL_UPDATE_SEQUENCE: u8 = 0xC7;
 
-/// Assert hardware reset and wait for the controller to become ready.
+/// Assert hardware reset, issue a software reset, and wait 10 ms for the
+/// controller to complete its internal startup sequence.
+///
+/// The SSD1677 BUSY pin goes HIGH immediately after the hardware reset pulse
+/// (the controller is initialising), so polling BUSY here would time-out.
+/// The pulp-os reference firmware confirms the correct sequence:
+/// hardware reset → SW_RESET command (0x12) → fixed 10 ms delay.
 pub fn emit_reset_preamble<T>(transport: &mut T) -> Result<(), T::Error>
 where
     T: DisplayTransport,
 {
     transport.reset()?;
-    transport.wait_while_busy()?;
+    transport.write_command(SOFT_RESET)?;
+    transport.delay_ms(10);
     Ok(())
 }
 
@@ -85,7 +92,7 @@ where
     write_command_with_data(
         transport,
         BOOSTER_SOFT_START,
-        &[0xAE, 0xC7, 0xC3, 0xC0, 0x40],
+        &[0xAE, 0xC7, 0xC3, 0xC0, 0x80],
     )?;
     write_command_with_data(transport, BORDER_WAVEFORM, &[0x01])?;
     write_command_with_data(transport, WRITE_VCOM, &[0x3C])?;
@@ -95,8 +102,8 @@ where
 
 /// Write gate-driver, data-entry-mode, and RAM address-window registers.
 ///
-/// Sets the X window as byte-column addresses `[0, ROW_BYTES-1]` and the Y window
-/// as row addresses `[0, PANEL_HEIGHT-1]` in little-endian 16-bit format.
+/// Sets the X window as pixel addresses `[0, PANEL_WIDTH-1]` and the Y window
+/// as row addresses `[PANEL_HEIGHT-1, 0]` in little-endian 16-bit format.
 pub fn emit_addressing_init_block<T>(transport: &mut T) -> Result<(), T::Error>
 where
     T: DisplayTransport,
@@ -110,33 +117,103 @@ where
             0x02,
         ],
     )?;
+    // DATA_ENTRY_MODE 0x01: Y-decrement, X-increment.
+    // On the X4 gate 0 is at the physical bottom; gate PANEL_HEIGHT-1 is at
+    // the top.  With Y-decrement the counter starts at the top gate and walks
+    // toward the bottom, so logical row 0 maps to the top of the screen.
     write_command_with_data(transport, DATA_ENTRY_MODE, &[0x01])?;
-    // X range: 2-byte payload — one byte-column address per field (0x00–0x63 for 800 px).
+    // X range: pixel addresses 0x0000 to 0x031F (0–799) covering all 800 pixels.
     write_command_with_data(
         transport,
         SET_RAM_X_RANGE,
-        &[0x00, (ROW_BYTES - 1) as u8],
+        &[
+            0x00,
+            0x00,
+            (PANEL_WIDTH - 1) as u8,
+            ((PANEL_WIDTH - 1) >> 8) as u8,
+        ],
     )?;
+    // Y range: gate PANEL_HEIGHT-1 (top) down to gate 0 (bottom).
     write_command_with_data(
         transport,
         SET_RAM_Y_RANGE,
         &[
-            0x00,
-            0x00,
             (PANEL_HEIGHT - 1) as u8,
             ((PANEL_HEIGHT - 1) >> 8) as u8,
+            0x00,
+            0x00,
         ],
     )?;
     Ok(())
 }
 
-/// Set the Y RAM window, set the Y address cursor to `row_start`, and reset the X cursor.
+/// Program a byte-aligned RAM window and reset the SSD1677 address counters.
 ///
-/// `row_start` — first row of the strip (0-based).
+/// This mirrors the working pulp-os `set_partial_ram_area()` sequence.
+pub fn emit_window_and_cursor<T>(
+    transport: &mut T,
+    x: u16,
+    y: u16,
+    width: u16,
+    height: u16,
+) -> Result<(), T::Error>
+where
+    T: DisplayTransport,
+{
+    debug_assert!(width > 0, "width must be at least 1");
+    debug_assert!(height > 0, "height must be at least 1");
+    debug_assert!(x % 8 == 0, "x must be byte aligned");
+    debug_assert!(width % 8 == 0, "width must be byte aligned");
+
+    let x_end = x + width - 1;
+    let y_flipped = PANEL_HEIGHT - y - height;
+    let y_top = y_flipped + height - 1;
+
+    write_command_with_data(transport, DATA_ENTRY_MODE, &[0x01])?;
+    write_command_with_data(
+        transport,
+        SET_RAM_X_RANGE,
+        &[x as u8, (x >> 8) as u8, x_end as u8, (x_end >> 8) as u8],
+    )?;
+    write_command_with_data(
+        transport,
+        SET_RAM_Y_RANGE,
+        &[
+            y_top as u8,
+            (y_top >> 8) as u8,
+            y_flipped as u8,
+            (y_flipped >> 8) as u8,
+        ],
+    )?;
+    write_command_with_data(transport, SET_RAM_X_COUNTER, &[x as u8, (x >> 8) as u8])?;
+    write_command_with_data(
+        transport,
+        SET_RAM_Y_COUNTER,
+        &[y_top as u8, (y_top >> 8) as u8],
+    )?;
+    Ok(())
+}
+
+/// Program the full-panel RAM window and reset the address counters.
+pub fn emit_full_window_and_cursor<T>(transport: &mut T) -> Result<(), T::Error>
+where
+    T: DisplayTransport,
+{
+    emit_window_and_cursor(transport, 0, 0, PANEL_WIDTH, PANEL_HEIGHT)
+}
+
+/// Set the Y RAM window, set the Y address cursor to `row_start`, and reset
+/// the X cursor.
+///
+/// `row_start` — first row of the strip (0 = top of the image / top of screen).
 /// `row_count` — number of rows in the strip; must be ≥ 1.
 ///
-/// Issues `SET_RAM_Y_RANGE`, `SET_RAM_Y_COUNTER`, and `SET_RAM_X_COUNTER` in that
-/// order, leaving the controller ready to accept strip pixel data.
+/// Gate 0 is at the physical top of the X4 panel.  `DATA_ENTRY_MODE = 0x03`
+/// (Y-increment, X-increment) means logical row N maps directly to gate N —
+/// no coordinate transformation is needed.
+///
+/// Issues `SET_RAM_Y_RANGE`, `SET_RAM_Y_COUNTER`, and `SET_RAM_X_COUNTER` in
+/// that order, leaving the controller ready to accept strip pixel data.
 pub fn emit_strip_window_and_cursor<T>(
     transport: &mut T,
     row_start: u16,
@@ -146,26 +223,8 @@ where
     T: DisplayTransport,
 {
     debug_assert!(row_count > 0, "row_count must be at least 1");
-    let row_end = row_start + row_count - 1;
-    write_command_with_data(
-        transport,
-        SET_RAM_Y_RANGE,
-        &[
-            row_start as u8,
-            (row_start >> 8) as u8,
-            row_end as u8,
-            (row_end >> 8) as u8,
-        ],
-    )?;
-    write_command_with_data(
-        transport,
-        SET_RAM_Y_COUNTER,
-        &[row_start as u8, (row_start >> 8) as u8],
-    )?;
-    write_command_with_data(transport, SET_RAM_X_COUNTER, &[0x00])?;
-    Ok(())
+    emit_window_and_cursor(transport, 0, row_start, PANEL_WIDTH, row_count)
 }
-
 
 fn write_command_with_data<T>(transport: &mut T, command: u8, data: &[u8]) -> Result<(), T::Error>
 where

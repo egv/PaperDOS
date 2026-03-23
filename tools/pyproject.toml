@@ -1,0 +1,16 @@
+[project]
+name = "tools"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Gennady Evstratov", email = "g.evstratov@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=12.1.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

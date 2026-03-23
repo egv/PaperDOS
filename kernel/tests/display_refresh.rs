@@ -6,9 +6,9 @@ use kernel::display::refresh::{
     normalize_partial_region, trigger_full_refresh, NormalizedRegion, PartialRegion,
 };
 use kernel::display::ssd1677::{
-    DISPLAY_UPDATE_CTRL2, FULL_UPDATE_SEQUENCE, MASTER_ACTIVATION, PANEL_HEIGHT, PANEL_WIDTH,
-    ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE,
-    WRITE_RAM_BW,
+    DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2, FULL_UPDATE_SEQUENCE, MASTER_ACTIVATION,
+    PANEL_HEIGHT, PANEL_WIDTH, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER,
+    SET_RAM_Y_RANGE, WRITE_RAM_BW,
 };
 
 #[test]
@@ -233,6 +233,8 @@ fn full_refresh_trigger_emits_update_ctrl2_activation_then_busy_wait() {
     assert_eq!(
         transport.ops,
         vec![
+            RecordedOp::Command(DISPLAY_UPDATE_CTRL1),
+            RecordedOp::Data(vec![0x40, 0x00]),
             RecordedOp::Command(DISPLAY_UPDATE_CTRL2),
             RecordedOp::Data(vec![FULL_UPDATE_SEQUENCE]),
             RecordedOp::Command(MASTER_ACTIVATION),

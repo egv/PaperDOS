@@ -17,8 +17,8 @@ fn abi_layout_and_abi_support_types() {
     assert_eq!(PD_ABI_VERSION, 1);
     assert_eq!(PD_SDK_VERSION, "0.1.0");
 
-    assert_eq!(PD_SCREEN_WIDTH, 800);
-    assert_eq!(PD_SCREEN_HEIGHT, 480);
+    assert_eq!(PD_SCREEN_WIDTH, 480);
+    assert_eq!(PD_SCREEN_HEIGHT, 800);
     assert_eq!(PD_COLOR_BLACK, 0x00);
     assert_eq!(PD_COLOR_WHITE, 0xFF);
 

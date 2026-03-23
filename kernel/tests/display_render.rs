@@ -4,8 +4,8 @@ use common::{RecordedOp, RecordingTransport};
 use kernel::display::driver::{clear_screen, write_strip};
 use kernel::display::render::{pack_strip, strip_geometry, StripGeometry};
 use kernel::display::ssd1677::{
-    PANEL_HEIGHT, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE,
-    STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, WRITE_RAM_BW,
+    DATA_ENTRY_MODE, PANEL_HEIGHT, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE,
+    SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE, STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, WRITE_RAM_BW,
 };
 
 #[test]
@@ -69,21 +69,26 @@ fn strip_packer_full_row_width() {
 #[test]
 fn single_strip_write_emits_window_cursor_then_data() {
     // Strip at row 0 (1 row, ROW_BYTES = 100 bytes of pre-packed pixel data).
-    // Expected sequence: Y range, Y cursor, X cursor reset, WRITE_RAM_BW + payload.
+    // Expected sequence: pulp-os-style full-width window + cursor, WRITE_RAM_BW + payload.
     let mut transport = RecordingTransport::default();
     let packed = vec![0xA5u8; ROW_BYTES];
 
     write_strip(&mut transport, 0, 1, &packed).unwrap();
 
+    // row_start=0, row_count=1 → flipped Y range [479, 479], X range [0, 799].
     assert_eq!(
         transport.ops,
         vec![
+            RecordedOp::Command(DATA_ENTRY_MODE),
+            RecordedOp::Data(vec![0x01]),
+            RecordedOp::Command(SET_RAM_X_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
-            RecordedOp::Data(vec![0x00, 0x00, 0x00, 0x00]),
-            RecordedOp::Command(SET_RAM_Y_COUNTER),
-            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Data(vec![0xDF, 0x01, 0xDF, 0x01]),
             RecordedOp::Command(SET_RAM_X_COUNTER),
-            RecordedOp::Data(vec![0x00]),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0xDF, 0x01]),
             RecordedOp::Command(WRITE_RAM_BW),
             RecordedOp::Data(vec![0xA5; ROW_BYTES]),
         ]
@@ -92,25 +97,48 @@ fn single_strip_write_emits_window_cursor_then_data() {
 
 #[test]
 fn full_clear_writes_all_strips_in_order() {
-    // 12 strips × 8 ops each (Y range, Y cursor, X cursor, WRITE_RAM_BW × command+data) = 96 ops.
+    // 12 strips × 12 ops each (entry mode, X/Y range, X/Y cursor, WRITE_RAM_BW × command+data).
     let mut transport = RecordingTransport::default();
     let mut buf = vec![0u8; STRIP_BUFFER_BYTES];
 
     clear_screen(&mut transport, 0xFF, &mut buf).unwrap();
 
     // Correct strip count
-    assert_eq!(transport.ops.len(), STRIP_COUNT * 8);
+    assert_eq!(transport.ops.len(), STRIP_COUNT * 12);
 
-    // First strip: Y window rows 0..39 = [0x00,0x00, 0x27,0x00]
-    assert_eq!(transport.ops[0], RecordedOp::Command(SET_RAM_Y_RANGE));
-    assert_eq!(transport.ops[1], RecordedOp::Data(vec![0x00, 0x00, 0x27, 0x00]));
-
-    // Last strip: Y window rows 440..479 = [0xB8,0x01, 0xDF,0x01]
-    let last = (STRIP_COUNT - 1) * 8;
-    assert_eq!(transport.ops[last], RecordedOp::Command(SET_RAM_Y_RANGE));
+    // First strip: rows 0..39 → flipped Y range [0x01DF, 0x01B8].
+    assert_eq!(transport.ops[0], RecordedOp::Command(DATA_ENTRY_MODE));
+    assert_eq!(transport.ops[1], RecordedOp::Data(vec![0x01]));
+    assert_eq!(transport.ops[2], RecordedOp::Command(SET_RAM_X_RANGE));
     assert_eq!(
-        transport.ops[last + 1],
-        RecordedOp::Data(vec![0xB8, 0x01, 0xDF, 0x01])
+        transport.ops[3],
+        RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03])
+    );
+    assert_eq!(transport.ops[4], RecordedOp::Command(SET_RAM_Y_RANGE));
+    assert_eq!(
+        transport.ops[5],
+        RecordedOp::Data(vec![0xDF, 0x01, 0xB8, 0x01])
+    );
+
+    // Last strip: rows 440..479 → flipped Y range [0x0027, 0x0000].
+    let last = (STRIP_COUNT - 1) * 12;
+    assert_eq!(transport.ops[last], RecordedOp::Command(DATA_ENTRY_MODE));
+    assert_eq!(transport.ops[last + 1], RecordedOp::Data(vec![0x01]));
+    assert_eq!(
+        transport.ops[last + 2],
+        RecordedOp::Command(SET_RAM_X_RANGE)
+    );
+    assert_eq!(
+        transport.ops[last + 3],
+        RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03])
+    );
+    assert_eq!(
+        transport.ops[last + 4],
+        RecordedOp::Command(SET_RAM_Y_RANGE)
+    );
+    assert_eq!(
+        transport.ops[last + 5],
+        RecordedOp::Data(vec![0x27, 0x00, 0x00, 0x00])
     );
 
     // Every WRITE_RAM_BW payload must be all 0xFF (white fill) and correct size
@@ -121,7 +149,7 @@ fn full_clear_writes_all_strips_in_order() {
         } else {
             STRIP_ROWS
         };
-        if let RecordedOp::Data(data) = &transport.ops[strip * 8 + 7] {
+        if let RecordedOp::Data(data) = &transport.ops[strip * 12 + 11] {
             assert_eq!(data.len(), rows * ROW_BYTES);
             assert!(data.iter().all(|&b| b == 0xFF));
         } else {

@@ -25,22 +25,41 @@ pub fn button_event_to_mask(event: ButtonEvent) -> u32 {
     }
 }
 
+// ── Global input callbacks ────────────────────────────────────────────────────
+//
+// Function pointer slots so main.rs can wire the ADC poller without generics.
+
+static mut GET_BUTTONS_FN: fn() -> u32 = || 0;
+static mut WAIT_BUTTON_FN: fn() -> u32 = || 0;
+
+/// Register the get-buttons callback.
+///
+/// # Safety
+/// Must be called once at init, before the first `pd_input_get_buttons` call.
+pub unsafe fn set_input_get_buttons_fn(f: fn() -> u32) {
+    (&raw mut GET_BUTTONS_FN).write(f);
+}
+
+/// Register the wait-button callback.
+///
+/// # Safety
+/// Must be called once at init, before the first `pd_input_wait_button` call.
+pub unsafe fn set_input_wait_button_fn(f: fn() -> u32) {
+    (&raw mut WAIT_BUTTON_FN).write(f);
+}
+
 // ── Syscall stubs ─────────────────────────────────────────────────────────────
 
 /// Return the bitmask of currently-pressed buttons.
-///
-/// Stub: returns 0 (no buttons pressed).
-/// Device impl: polls the ADC pipeline and aggregates pressed button bits.
 pub extern "C" fn pd_input_get_buttons() -> u32 {
-    0
+    // SAFETY: GET_BUTTONS_FN written once at init; no concurrent modification.
+    unsafe { (*(&raw const GET_BUTTONS_FN))() }
 }
 
 /// Block until a button is pressed and return its bitmask.
-///
-/// Stub: returns 0 immediately (host has no ADC hardware).
-/// Device impl: waits for a `ButtonEvent` from the Embassy task queue.
 pub extern "C" fn pd_input_wait_button() -> u32 {
-    0
+    // SAFETY: WAIT_BUTTON_FN written once at init; no concurrent modification.
+    unsafe { (*(&raw const WAIT_BUTTON_FN))() }
 }
 
 /// Return the battery charge level as a percentage (0–100), or −1 if unknown.

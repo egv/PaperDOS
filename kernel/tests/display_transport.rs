@@ -2,11 +2,11 @@ mod common;
 
 use common::{RecordedOp, RecordingTransport};
 use kernel::display::ssd1677::{
-    emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
-    emit_strip_window_and_cursor, AUTO_WRITE_BW_RAM, AUTO_WRITE_RED_RAM, BOOSTER_SOFT_START,
-    BORDER_WAVEFORM, DATA_ENTRY_MODE, DEEP_SLEEP, DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2,
-    DRIVER_OUTPUT_CONTROL, MASTER_ACTIVATION, PANEL_HEIGHT, PANEL_WIDTH, ROW_BYTES,
-    SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE, SOFT_RESET,
+    emit_addressing_init_block, emit_full_window_and_cursor, emit_power_init_block,
+    emit_reset_preamble, emit_strip_window_and_cursor, AUTO_WRITE_BW_RAM, AUTO_WRITE_RED_RAM,
+    BOOSTER_SOFT_START, BORDER_WAVEFORM, DATA_ENTRY_MODE, DEEP_SLEEP, DISPLAY_UPDATE_CTRL1,
+    DISPLAY_UPDATE_CTRL2, DRIVER_OUTPUT_CONTROL, MASTER_ACTIVATION, PANEL_HEIGHT, PANEL_WIDTH,
+    ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE, SOFT_RESET,
     STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, TEMP_SENSOR_CONTROL, WRITE_LUT, WRITE_RAM_BW,
     WRITE_RAM_RED, WRITE_TEMP, WRITE_VCOM,
 };
@@ -70,9 +70,10 @@ fn display_reset_preamble_display_transport() {
 
     emit_reset_preamble(&mut transport).unwrap();
 
+    // reset() then SW_RESET command; no busy-wait (SSD1677 BUSY stays high after HW reset).
     assert_eq!(
         transport.ops,
-        vec![RecordedOp::Reset, RecordedOp::WaitWhileBusy,]
+        vec![RecordedOp::Reset, RecordedOp::Command(SOFT_RESET)]
     );
 }
 
@@ -86,7 +87,7 @@ fn display_power_init_block_display_transport() {
         transport.ops,
         vec![
             RecordedOp::Command(BOOSTER_SOFT_START),
-            RecordedOp::Data(vec![0xAE, 0xC7, 0xC3, 0xC0, 0x40]),
+            RecordedOp::Data(vec![0xAE, 0xC7, 0xC3, 0xC0, 0x80]), // last byte 0x80 per pulp-os
             RecordedOp::Command(BORDER_WAVEFORM),
             RecordedOp::Data(vec![0x01]),
             RecordedOp::Command(WRITE_VCOM),
@@ -109,18 +110,41 @@ fn display_addressing_init_block_display_transport() {
             RecordedOp::Command(DRIVER_OUTPUT_CONTROL),
             RecordedOp::Data(vec![0xDF, 0x01, 0x02]),
             RecordedOp::Command(DATA_ENTRY_MODE),
+            RecordedOp::Data(vec![0x01]), // Y-decrement, X-increment (gate 0 = physical bottom)
+            RecordedOp::Command(SET_RAM_X_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
+            RecordedOp::Command(SET_RAM_Y_RANGE),
+            RecordedOp::Data(vec![0xDF, 0x01, 0x00, 0x00]), // Y range: gate 479 (top) down to gate 0 (bottom)
+        ]
+    );
+}
+
+#[test]
+fn full_window_cursor_uses_pulpos_addressing() {
+    let mut transport = RecordingTransport::default();
+
+    emit_full_window_and_cursor(&mut transport).unwrap();
+
+    assert_eq!(
+        transport.ops,
+        vec![
+            RecordedOp::Command(DATA_ENTRY_MODE),
             RecordedOp::Data(vec![0x01]),
             RecordedOp::Command(SET_RAM_X_RANGE),
-            RecordedOp::Data(vec![0x00, 0x63]),
+            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
-            RecordedOp::Data(vec![0x00, 0x00, 0xDF, 0x01]),
+            RecordedOp::Data(vec![0xDF, 0x01, 0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_X_COUNTER),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0xDF, 0x01]),
         ]
     );
 }
 
 #[test]
 fn strip_window_cursor_first_strip() {
-    // Strip 0: rows 0..39.  Y window [0x0000, 0x0027], Y cursor 0x0000, X cursor 0x00.
+    // Strip 0: logical rows 0..39 map to physical gate rows 479..440.
     let mut transport = RecordingTransport::default();
 
     emit_strip_window_and_cursor(&mut transport, 0, 40).unwrap();
@@ -128,19 +152,23 @@ fn strip_window_cursor_first_strip() {
     assert_eq!(
         transport.ops,
         vec![
+            RecordedOp::Command(DATA_ENTRY_MODE),
+            RecordedOp::Data(vec![0x01]),
+            RecordedOp::Command(SET_RAM_X_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
-            RecordedOp::Data(vec![0x00, 0x00, 0x27, 0x00]),
-            RecordedOp::Command(SET_RAM_Y_COUNTER),
-            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Data(vec![0xDF, 0x01, 0xB8, 0x01]),
             RecordedOp::Command(SET_RAM_X_COUNTER),
-            RecordedOp::Data(vec![0x00]),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0xDF, 0x01]),
         ]
     );
 }
 
 #[test]
 fn strip_window_cursor_mid_strip() {
-    // Strip 1: rows 40..79.  Y window [0x0028, 0x004F], Y cursor 0x0028, X cursor 0x00.
+    // Strip 1: logical rows 40..79 map to physical gate rows 439..400.
     let mut transport = RecordingTransport::default();
 
     emit_strip_window_and_cursor(&mut transport, 40, 40).unwrap();
@@ -148,12 +176,16 @@ fn strip_window_cursor_mid_strip() {
     assert_eq!(
         transport.ops,
         vec![
+            RecordedOp::Command(DATA_ENTRY_MODE),
+            RecordedOp::Data(vec![0x01]),
+            RecordedOp::Command(SET_RAM_X_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x1F, 0x03]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
-            RecordedOp::Data(vec![0x28, 0x00, 0x4F, 0x00]),
-            RecordedOp::Command(SET_RAM_Y_COUNTER),
-            RecordedOp::Data(vec![0x28, 0x00]),
+            RecordedOp::Data(vec![0xB7, 0x01, 0x90, 0x01]),
             RecordedOp::Command(SET_RAM_X_COUNTER),
-            RecordedOp::Data(vec![0x00]),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0xB7, 0x01]),
         ]
     );
 }

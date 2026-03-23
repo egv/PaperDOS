@@ -1,6 +1,6 @@
 use crate::display::ssd1677::{
-    DISPLAY_UPDATE_CTRL2, FULL_UPDATE_SEQUENCE, MASTER_ACTIVATION, PANEL_HEIGHT, PANEL_WIDTH,
-    PARTIAL_UPDATE_SEQUENCE,
+    DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2, FULL_UPDATE_SEQUENCE, MASTER_ACTIVATION,
+    PANEL_HEIGHT, PANEL_WIDTH, PARTIAL_UPDATE_SEQUENCE,
 };
 use crate::display::transport::DisplayTransport;
 
@@ -74,7 +74,10 @@ impl PartialRefreshCounter {
     /// update to immediately promote.
     pub fn new(threshold: u32) -> Self {
         debug_assert!(threshold > 0, "threshold must be at least 1");
-        Self { count: 0, threshold }
+        Self {
+            count: 0,
+            threshold,
+        }
     }
 
     /// Record one partial refresh.
@@ -115,13 +118,16 @@ where
 
 /// Trigger a full-panel refresh cycle.
 ///
-/// Writes the full-update sequence flag to `DISPLAY_UPDATE_CTRL2`, issues
-/// `MASTER_ACTIVATION` to start the refresh, then waits for the controller
-/// to signal completion via the BUSY line.
+/// Writes `DISPLAY_UPDATE_CTRL1` (0x21) with `[0x40, 0x00]` (required by the
+/// pulp-os reference firmware), then the full-update sequence flag to
+/// `DISPLAY_UPDATE_CTRL2`, issues `MASTER_ACTIVATION`, and waits for the
+/// controller to signal completion via the BUSY line.
 pub fn trigger_full_refresh<T>(transport: &mut T) -> Result<(), T::Error>
 where
     T: DisplayTransport,
 {
+    transport.write_command(DISPLAY_UPDATE_CTRL1)?;
+    transport.write_data(&[0x40, 0x00])?;
     transport.write_command(DISPLAY_UPDATE_CTRL2)?;
     transport.write_data(&[FULL_UPDATE_SEQUENCE])?;
     transport.write_command(MASTER_ACTIVATION)?;
