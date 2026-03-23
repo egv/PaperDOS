@@ -1,4 +1,7 @@
-use kernel::input::adc::{AdcSource, ScriptedAdc};
+mod common;
+
+use common::ScriptedAdc;
+use kernel::input::adc::AdcSource;
 
 #[test]
 fn scripted_adc_returns_sequence_in_order_input_adc() {

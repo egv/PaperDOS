@@ -1,4 +1,6 @@
-use kernel::input::adc::ScriptedAdc;
+mod common;
+
+use common::ScriptedAdc;
 use kernel::input::poller::InputPoller;
 use kernel::input::{ButtonEvent, ButtonId};
 

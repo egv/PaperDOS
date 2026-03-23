@@ -3,7 +3,7 @@ use crate::input::ButtonId;
 /// Debounce filter: stable state only changes after `threshold_ticks` consecutive
 /// identical readings.
 pub struct DebounceFilter {
-    pub stable: Option<ButtonId>,
+    stable: Option<ButtonId>,
     candidate: Option<ButtonId>,
     ticks: u32,
     threshold_ticks: u32,

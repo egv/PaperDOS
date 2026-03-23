@@ -4,6 +4,10 @@ use crate::input::ButtonId;
 ///
 /// Returns `None` when the voltage does not fall within any button's window (float / no press).
 /// When windows overlap (they don't here), the lower center wins.
+///
+/// The Right window starts at 0 mV. This is correct: the pin is actively driven by the
+/// ladder whenever the poller is running, so a 0 mV reading unambiguously means Right is
+/// pressed. A floating/disconnected pin cannot reach this rail by accident.
 pub fn decode_gpio1(mv: u16) -> Option<ButtonId> {
     const WINDOWS: &[(u16, u16, ButtonId)] = &[
         (0,    53,   ButtonId::Right),
@@ -17,6 +21,7 @@ pub fn decode_gpio1(mv: u16) -> Option<ButtonId> {
 /// GPIO2 2-button resistor ladder: Down=3mV±50, Up=1659mV±150.
 ///
 /// Returns `None` when the voltage does not fall within any button's window.
+/// Same 0 mV assumption as `decode_gpio1`: pin is actively driven when polled.
 pub fn decode_gpio2(mv: u16) -> Option<ButtonId> {
     const WINDOWS: &[(u16, u16, ButtonId)] = &[
         (0,    53,   ButtonId::Down),
