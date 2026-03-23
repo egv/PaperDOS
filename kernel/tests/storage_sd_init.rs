@@ -6,11 +6,11 @@ use kernel::storage::sd::{CardKind, SdCard};
 /// Build a MockSpi pre-loaded with a minimal happy-path SDHC init exchange.
 ///
 /// Transaction sequence:
-/// 0: 80-clock preamble (10x 0xFF write)                     — no reply needed
-/// 1: CMD0 → R1 = 0x01 (idle)
-/// 2: CMD8 → R7 = [0x01, 0x00, 0x00, 0x01, 0xAA]
+/// 0: 80-clock preamble (10x 0xFF write)                       — no reply needed
+/// 1: CMD0  → R1 = 0x01 (idle)
+/// 2: CMD8  → R7 = [0x01, 0x00, 0x00, 0x01, 0xAA]
 /// 3: CMD55 (APP_CMD) → R1 = 0x01
-/// 4: ACMD41 (HCS) → R1 = 0x00  (card ready)
+/// 4: ACMD41 (HCS)    → R1 = 0x00  (card ready on first attempt — no delay issued)
 /// 5: CMD58 (READ_OCR) → R3 = [0x00, 0xC0, 0x00, 0x00, 0x00] (CCS=1 → SDHC)
 fn make_sdhc_spi() -> MockSpi {
     MockSpi::new(&[
@@ -18,7 +18,7 @@ fn make_sdhc_spi() -> MockSpi {
         &[0xFF, 0xFF, 0x01],                          // CMD0 response (0x01 = idle)
         &[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA], // CMD8 R7
         &[0xFF, 0xFF, 0x01],                          // CMD55 R1
-        &[0xFF, 0xFF, 0x00],                          // ACMD41 R1 = ready
+        &[0xFF, 0xFF, 0x00],                          // ACMD41 R1 = ready (no delay needed)
         &[0xFF, 0xFF, 0x00, 0xC0, 0x00, 0x00, 0x00], // CMD58 R3 (CCS=1)
     ])
 }
@@ -32,23 +32,24 @@ fn sd_init_sdhc_returns_ok_storage_sd_init() {
 
 #[test]
 fn sd_init_not_ready_returns_err_storage_sd_init() {
-    // ACMD41 always returns 0x01 (busy) — should return NotReady after retries
-    let mut spi = MockSpi::new(&[
-        &[],                                          // preamble
-        &[0xFF, 0xFF, 0x01],                          // CMD0
-        &[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA], // CMD8
-        // CMD55+ACMD41 always returns busy (0x01); fill 20 pairs
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01],
-        &[0xFF, 0xFF, 0x01], &[0xFF, 0xFF, 0x01], // 10 pairs total
-    ]);
+    // ACMD41 always returns 0x01 (busy).  Each retry issues CMD55, ACMD41, and
+    // a 50 ms delay transaction.  With ACMD41_MAX_RETRIES = 20 the sequence is:
+    // preamble + CMD0 + CMD8 + 20 × (CMD55 + ACMD41 + delay) = 63 transactions.
+    let mut replies: Vec<&[u8]> = Vec::new();
+    replies.push(&[]);                                          // preamble
+    replies.push(&[0xFF, 0xFF, 0x01]);                         // CMD0
+    replies.push(&[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA]); // CMD8
+    // Pre-load enough CMD55/ACMD41/delay triples so MockSpi returns the right
+    // replies in order.  Static slices live for the duration of the test.
+    const CMD55_BUSY: &[u8] = &[0xFF, 0xFF, 0x01];
+    const ACMD41_BUSY: &[u8] = &[0xFF, 0xFF, 0x01];
+    const DELAY_EMPTY: &[u8] = &[];
+    for _ in 0..20 {
+        replies.push(CMD55_BUSY);
+        replies.push(ACMD41_BUSY);
+        replies.push(DELAY_EMPTY);
+    }
+    let spi = MockSpi::new(&replies);
     let mut card = SdCard::new(spi);
     let err = card.init().unwrap_err();
     assert_eq!(err, kernel::storage::StorageError::NotReady);

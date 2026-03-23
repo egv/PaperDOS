@@ -25,15 +25,13 @@ mod imp {
     {
         /// Construct an [`FsState`] from a shared SPI2 device.
         ///
-        /// Runs the SD card SPI initialisation sequence; returns a ready
-        /// filesystem state on success. `block_count` is the number of
-        /// 512-byte sectors on the card.
-        pub fn from_spi2(
-            spi_dev: SdSpiDevice<'static, CS, D>,
-            block_count: u32,
-        ) -> Result<Self, StorageError> {
+        /// Runs the SD card SPI initialisation sequence, reads the card
+        /// capacity from the CSD register (CMD9), and returns a ready
+        /// filesystem state on success.
+        pub fn from_spi2(spi_dev: SdSpiDevice<'static, CS, D>) -> Result<Self, StorageError> {
             let mut sd = SdCard::new(spi_dev);
             sd.init()?;
+            let block_count = sd.read_capacity()?;
             let bd = SdBlockDevice::new(sd, block_count);
             Ok(Self::new(bd))
         }

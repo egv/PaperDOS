@@ -12,6 +12,9 @@ pub enum SeekFrom {
     /// Offset from the current position (may be negative).
     Current(i32),
     /// Offset backwards from the end of the file.
+    ///
+    /// Unlike `std::io::SeekFrom::End` (which takes `i64` and can seek past
+    /// EOF), this variant is unsigned and only supports seeking backwards.
     End(u32),
 }
 
@@ -51,12 +54,18 @@ impl TimeSource for NoopTimeSource {
 }
 
 /// Opaque index into the open-file slot table.
+///
+/// The inner slot index is intentionally private; callers should treat this as
+/// an opaque token and not inspect or construct it directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FileHandle(pub u8);
+pub struct FileHandle(pub(crate) u8);
 
 /// Opaque index into the open-directory slot table.
+///
+/// The inner slot index is intentionally private; callers should treat this as
+/// an opaque token and not inspect or construct it directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DirHandle(pub u8);
+pub struct DirHandle(pub(crate) u8);
 
 /// A single directory entry returned by [`FsState::fs_readdir`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,9 +133,13 @@ where
 
     /// Open a file by 8.3 name in the root directory.
     ///
-    /// Returns the slot index as a [`FileHandle`].  Returns
-    /// [`StorageError::NotFound`] if the file does not exist, or
-    /// [`StorageError::NoSpace`] if all 8 slots are occupied.
+    /// Returns a [`FileHandle`] on success.  Returns [`StorageError::NotFound`]
+    /// if the file does not exist, or [`StorageError::NoSpace`] if all 8 slots
+    /// are already occupied.
+    ///
+    /// When `write` is `true` the file is opened with
+    /// `ReadWriteCreateOrTruncate`: the file is created if absent and truncated
+    /// to zero length if it exists.  There is no append mode.
     pub fn fs_open(&mut self, path: &str, write: bool) -> Result<FileHandle, StorageError> {
         let dir = self.ensure_root_dir()?;
         let mode = if write { Mode::ReadWriteCreateOrTruncate } else { Mode::ReadOnly };
@@ -275,6 +288,13 @@ where
     ///
     /// Returns `Ok(Some(entry))` while entries remain, `Ok(None)` when
     /// exhausted.  The internal counter advances on each successful call.
+    ///
+    /// # Performance
+    ///
+    /// `embedded-sdmmc` 0.7 provides no incremental cursor API.  Each call
+    /// re-iterates the directory from the beginning and skips previously-seen
+    /// entries, giving O(n²) block reads for a directory with n entries.  For
+    /// the small root directories expected on PaperDOS this is acceptable.
     pub fn fs_readdir(&mut self, handle: DirHandle) -> Result<Option<PdDirEntry>, StorageError> {
         let idx = handle.0 as usize;
         let (raw_dir, entry_idx) = self
