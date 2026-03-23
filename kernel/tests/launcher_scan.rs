@@ -1,7 +1,7 @@
 mod common;
 use common::InMemoryBlockDevice;
 
-use embedded_sdmmc::{Block, BlockCount, BlockIdx};
+use embedded_sdmmc::Block;
 use kernel::launcher::{scan_apps, AppInfo, LauncherState, MAX_APPS};
 use kernel::storage::fs::FsState;
 
@@ -13,7 +13,7 @@ use kernel::storage::fs::FsState;
 // Global blocks:
 //   0  : MBR (partition 1: FAT16, LBA start=1, size=4200)
 //   1  : Boot sector (FAT16 BPB)
-//   2-18: FAT (17 sectors); entries 0-4 set (end-of-chain for clusters 2+3)
+//   2-18: FAT (17 sectors); entries 0-3 set (end-of-chain for clusters 2+3)
 //   19 : Root directory — HELLO.PDB (cluster 2, size 104) + WORLD.PDB (cluster 3, size 104)
 //   20 : Cluster 2 — 104 bytes of HELLO.PDB data (valid PDB magic at offset 0)
 //   21 : Cluster 3 — 104 bytes of WORLD.PDB data (valid PDB magic at offset 0)
