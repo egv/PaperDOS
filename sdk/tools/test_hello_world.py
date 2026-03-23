@@ -39,15 +39,18 @@ HEADER_PATH = REPO_ROOT / "sdk" / "include" / "paperdos.h"
 # ── Synthetic ELF32-LE builder ────────────────────────────────────────────────
 
 
-def _build_elf32_le(text_data=b"\x00\x00\x00\x00", rela_entries=()):
+def _build_elf32_le(text_data=b"\x00\x00\x00\x00", data_data=b"",
+                    rela_entries=()):
     """
     Build a minimal 32-bit little-endian ELF in memory.
 
     Sections produced:
       0: NULL
-      1: .shstrtab (string table for section names)
-      2: .text      (provided text_data)
-      3: .rela.text (one RELA entry per rela_entries tuple (r_offset, r_type))
+      1: .shstrtab  (string table for section names)
+      2: .text       (provided text_data)
+      3: .data       (provided data_data; omitted when empty)
+      4: .rela.text  (one RELA entry per rela_entries tuple (r_offset, r_type);
+                      omitted when rela_entries is empty)
 
     The ELF header, section data, and section headers are packed together
     in a single bytes object that pdpack.py's read_elf_sections() can parse.
@@ -56,16 +59,20 @@ def _build_elf32_le(text_data=b"\x00\x00\x00\x00", rela_entries=()):
     SH_SIZE = 40
 
     # Build string table: null + section names
+    has_data = bool(data_data)
     has_rela = bool(rela_entries)
     strtab_parts = [b"\x00", b".shstrtab\x00", b".text\x00"]
+    if has_data:
+        strtab_parts.append(b".data\x00")
     if has_rela:
         strtab_parts.append(b".rela.text\x00")
     strtab = b"".join(strtab_parts)
 
     # String-table offsets for each section name
-    shstrtab_name = 1                       # b".shstrtab" at offset 1
-    text_name = 1 + len(b".shstrtab\x00")   # = 11
-    rela_name = text_name + len(b".text\x00")  # = 17
+    shstrtab_name = 1
+    text_name = 1 + len(b".shstrtab\x00")              # 11
+    data_name = text_name + len(b".text\x00")           # 17
+    rela_name = data_name + (len(b".data\x00") if has_data else 0)
 
     # Build RELA data
     rela_data = b""
@@ -73,20 +80,21 @@ def _build_elf32_le(text_data=b"\x00\x00\x00\x00", rela_entries=()):
         rela_data += struct.pack("<III", r_offset, r_type, 0)
 
     # Layout:
-    #   0         .. ELF_HDR            : ELF header
-    #   ELF_HDR   .. ELF_HDR+strtab     : .shstrtab data
-    #   +strtab   .. +text              : .text data
-    #   +text     .. +rela              : .rela.text data (may be empty)
-    #   aligned   ..                    : section headers
+    #   0          .. ELF_HDR              : ELF header
+    #   ELF_HDR    .. +strtab              : .shstrtab data
+    #   +strtab    .. +text_data           : .text data
+    #   +text_data .. +data_data           : .data data (may be empty)
+    #   +data_data .. +rela_data           : .rela.text data (may be empty)
+    #   aligned    ..                      : section headers
     strtab_off = ELF_HDR
-    text_off = strtab_off + len(strtab)
-    rela_off = text_off + len(text_data)
-    data_end = rela_off + len(rela_data)
-    # Align section-header table to 4 bytes.
-    shoff = (data_end + 3) & ~3
-    pad = shoff - data_end
+    text_off   = strtab_off + len(strtab)
+    data_off   = text_off   + len(text_data)
+    rela_off   = data_off   + len(data_data)
+    body_end   = rela_off   + len(rela_data)
+    shoff = (body_end + 3) & ~3
+    pad   = shoff - body_end
 
-    num_sections = 4 if has_rela else 3
+    num_sections = 3 + has_data + has_rela
 
     # ── ELF header ────────────────────────────────────────────────────────────
     elf_ident = struct.pack(
@@ -124,19 +132,20 @@ def _build_elf32_le(text_data=b"\x00\x00\x00\x00", rela_entries=()):
             name, typ, flags, addr, offset, size, link, info, align, entsize,
         )
 
-    sh0 = b"\x00" * SH_SIZE                          # NULL
-    sh1 = sh(shstrtab_name, 3, 0, 0,                 # .shstrtab (SHT_STRTAB=3)
-             strtab_off, len(strtab))
-    sh2 = sh(text_name, 1, 6, 0,                     # .text (SHT_PROGBITS=1, AX)
-             text_off, len(text_data), align=4)
-    sections = sh0 + sh1 + sh2
+    sh_table = b"\x00" * SH_SIZE                       # 0: NULL
+    sh_table += sh(shstrtab_name, 3, 0, 0,             # 1: .shstrtab
+                   strtab_off, len(strtab))
+    sh_table += sh(text_name, 1, 6, 0,                 # 2: .text (PROGBITS, AX)
+                   text_off, len(text_data), align=4)
+    if has_data:
+        sh_table += sh(data_name, 1, 3, 0,             # 3: .data (PROGBITS, WA)
+                       data_off, len(data_data), align=4)
     if has_rela:
-        sh3 = sh(rela_name, 4, 0, 0,                 # .rela.text (SHT_RELA=4)
-                 rela_off, len(rela_data),
-                 entsize=12)
-        sections += sh3
+        sh_table += sh(rela_name, 4, 0, 0,             # .rela.text (RELA)
+                       rela_off, len(rela_data), entsize=12)
 
-    return elf_header + strtab + text_data + rela_data + (b"\x00" * pad) + sections
+    return (elf_header + strtab + text_data + data_data
+            + rela_data + (b"\x00" * pad) + sh_table)
 
 
 # ── B1: hello_world/main.c source checks ─────────────────────────────────────
@@ -144,6 +153,8 @@ def _build_elf32_le(text_data=b"\x00\x00\x00\x00", rela_entries=()):
 
 class TestHelloWorldSource(unittest.TestCase):
     def setUp(self):
+        if not HELLO_SRC.exists():
+            self.skipTest(f"{HELLO_SRC} not found")
         self.src = HELLO_SRC.read_text()
 
     def test_source_file_exists(self):
@@ -302,7 +313,7 @@ class TestPdpackEndToEnd(unittest.TestCase):
     def test_pdb_passes_validation(self):
         pdb = self._run_pipeline()
         is_valid, messages = validate_pdb(pdb)
-        self.assertTrue(is_valid, f"validate_pdb failed:\n" + "\n".join(messages))
+        self.assertTrue(is_valid, "validate_pdb failed:\n" + "\n".join(messages))
 
     def test_pdb_name_stored(self):
         pdb = self._run_pipeline(app_name="Hello World")
@@ -326,6 +337,43 @@ class TestPdpackEndToEnd(unittest.TestCase):
         )
         reloc_count = struct.unpack_from("<I", pdb, 24)[0]
         self.assertEqual(reloc_count, 2)
+
+    def test_pipeline_with_data_section_passes_validation(self):
+        """An app with initialized globals (.data) must produce a valid .pdb."""
+        elf = _build_elf32_le(
+            text_data=b"\x00" * 16,
+            data_data=b"\xAA\xBB\xCC\xDD" * 4,  # 16 bytes of .data
+        )
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            f.write(elf)
+            elf_path = f.name
+        try:
+            sections, entry_addr, elf_data = read_elf_sections(elf_path)
+        finally:
+            Path(elf_path).unlink(missing_ok=True)
+
+        text = sections.get(".text", {}).get("data", b"")
+        data = sections.get(".data", {}).get("data", b"")
+        self.assertEqual(len(data), 16, "expected .data section with 16 bytes")
+
+        image = text + data
+        relocs = extract_relocations(elf_data, sections)
+        pdb = build_pdb(
+            image_data=image,
+            text_size=len(text),
+            data_size=len(data),
+            bss_size=0,
+            entry_offset=entry_addr,
+            relocs=relocs,
+            app_name="DataTest",
+            app_version="1.0.0",
+            abi_version=1,
+            min_heap=0,
+            flags=0,
+        )
+        is_valid, messages = validate_pdb(pdb)
+        self.assertTrue(is_valid, "\n".join(messages))
+        self.assertEqual(struct.unpack_from("<I", pdb, 16)[0], 16)  # data_size field
 
 
 if __name__ == "__main__":
