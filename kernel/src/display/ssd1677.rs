@@ -166,6 +166,7 @@ where
     Ok(())
 }
 
+
 fn write_command_with_data<T>(transport: &mut T, command: u8, data: &[u8]) -> Result<(), T::Error>
 where
     T: DisplayTransport,
