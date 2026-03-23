@@ -9,3 +9,4 @@ pub mod loader;
 pub mod storage;
 pub mod pdb;
 pub mod platform;
+pub mod syscall;
