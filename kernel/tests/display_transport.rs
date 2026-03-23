@@ -1,49 +1,16 @@
+mod common;
+
+use common::{RecordedOp, RecordingTransport};
 use kernel::display::ssd1677::{
-    emit_addressing_init_block, emit_power_init_block, emit_reset_preamble, AUTO_WRITE_BW_RAM,
-    AUTO_WRITE_RED_RAM, BOOSTER_SOFT_START, BORDER_WAVEFORM, DATA_ENTRY_MODE, DEEP_SLEEP,
-    DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2, DRIVER_OUTPUT_CONTROL, MASTER_ACTIVATION,
-    PANEL_HEIGHT, PANEL_WIDTH, ROW_BYTES, SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER,
-    SET_RAM_Y_RANGE, SOFT_RESET, STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, TEMP_SENSOR_CONTROL,
-    WRITE_LUT, WRITE_RAM_BW, WRITE_RAM_RED, WRITE_TEMP, WRITE_VCOM,
+    emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
+    emit_strip_window_and_cursor, AUTO_WRITE_BW_RAM, AUTO_WRITE_RED_RAM, BOOSTER_SOFT_START,
+    BORDER_WAVEFORM, DATA_ENTRY_MODE, DEEP_SLEEP, DISPLAY_UPDATE_CTRL1, DISPLAY_UPDATE_CTRL2,
+    DRIVER_OUTPUT_CONTROL, MASTER_ACTIVATION, PANEL_HEIGHT, PANEL_WIDTH, ROW_BYTES,
+    SET_RAM_X_COUNTER, SET_RAM_X_RANGE, SET_RAM_Y_COUNTER, SET_RAM_Y_RANGE, SOFT_RESET,
+    STRIP_BUFFER_BYTES, STRIP_COUNT, STRIP_ROWS, TEMP_SENSOR_CONTROL, WRITE_LUT, WRITE_RAM_BW,
+    WRITE_RAM_RED, WRITE_TEMP, WRITE_VCOM,
 };
 use kernel::display::transport::DisplayTransport;
-
-#[derive(Debug, Eq, PartialEq)]
-enum RecordedOp {
-    Reset,
-    WaitWhileBusy,
-    Command(u8),
-    Data(Vec<u8>),
-}
-
-#[derive(Default)]
-struct RecordingTransport {
-    ops: Vec<RecordedOp>,
-}
-
-impl DisplayTransport for RecordingTransport {
-    type Error = ();
-
-    fn reset(&mut self) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Reset);
-        Ok(())
-    }
-
-    fn wait_while_busy(&mut self) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::WaitWhileBusy);
-        Ok(())
-    }
-
-    fn write_command(&mut self, command: u8) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Command(command));
-        Ok(())
-    }
-
-    fn write_data(&mut self, data: &[u8]) -> Result<(), Self::Error> {
-        self.ops.push(RecordedOp::Data(data.to_vec()));
-        Ok(())
-    }
-}
 
 #[test]
 fn ssd1677_constants_display_transport() {
@@ -147,6 +114,46 @@ fn display_addressing_init_block_display_transport() {
             RecordedOp::Data(vec![0x00, 0x63]),
             RecordedOp::Command(SET_RAM_Y_RANGE),
             RecordedOp::Data(vec![0x00, 0x00, 0xDF, 0x01]),
+        ]
+    );
+}
+
+#[test]
+fn strip_window_cursor_first_strip() {
+    // Strip 0: rows 0..39.  Y window [0x0000, 0x0027], Y cursor 0x0000, X cursor 0x00.
+    let mut transport = RecordingTransport::default();
+
+    emit_strip_window_and_cursor(&mut transport, 0, 40).unwrap();
+
+    assert_eq!(
+        transport.ops,
+        vec![
+            RecordedOp::Command(SET_RAM_Y_RANGE),
+            RecordedOp::Data(vec![0x00, 0x00, 0x27, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0x00, 0x00]),
+            RecordedOp::Command(SET_RAM_X_COUNTER),
+            RecordedOp::Data(vec![0x00]),
+        ]
+    );
+}
+
+#[test]
+fn strip_window_cursor_mid_strip() {
+    // Strip 1: rows 40..79.  Y window [0x0028, 0x004F], Y cursor 0x0028, X cursor 0x00.
+    let mut transport = RecordingTransport::default();
+
+    emit_strip_window_and_cursor(&mut transport, 40, 40).unwrap();
+
+    assert_eq!(
+        transport.ops,
+        vec![
+            RecordedOp::Command(SET_RAM_Y_RANGE),
+            RecordedOp::Data(vec![0x28, 0x00, 0x4F, 0x00]),
+            RecordedOp::Command(SET_RAM_Y_COUNTER),
+            RecordedOp::Data(vec![0x28, 0x00]),
+            RecordedOp::Command(SET_RAM_X_COUNTER),
+            RecordedOp::Data(vec![0x00]),
         ]
     );
 }
