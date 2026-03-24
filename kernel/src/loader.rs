@@ -149,6 +149,7 @@ pub unsafe fn load_and_run(
     let entry = unsafe { region.as_ptr().add(prepared.entry_offset as usize) };
     serial_write_bytes(b"LAUNCH:jump\n");
     unsafe { jump_fn(entry, syscalls) };
+    serial_write_bytes(b"LAUNCH:returned\n");
     Ok(())
 }
 
