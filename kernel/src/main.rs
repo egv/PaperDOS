@@ -9,8 +9,6 @@ mod device {
     use core::cell::RefCell;
     use core::hint::spin_loop;
     use core::{slice, str};
-    use core::fmt::Write as _;
-
     use critical_section::Mutex;
     use embassy_executor::Spawner;
     use embedded_sdmmc::sdcard::DummyCsPin;
@@ -83,10 +81,10 @@ mod device {
         last_event: Option<ButtonEvent>,
     }
 
-    static SERIAL_CELL: StaticCell<UsbSerialJtag<'static>> = StaticCell::new();
+    static SERIAL_CELL: StaticCell<UsbSerialJtag<'static, Blocking>> = StaticCell::new();
 
     /// Raw pointer to the live USB Serial/JTAG instance; set once in `main()`.
-    static mut SERIAL_PTR: *mut UsbSerialJtag<'static> = core::ptr::null_mut();
+    static mut SERIAL_PTR: *mut UsbSerialJtag<'static, Blocking> = core::ptr::null_mut();
 
     fn device_serial_write(bytes: &[u8]) {
         // SAFETY: SERIAL_PTR written once before any task runs; single-core.
@@ -94,7 +92,9 @@ mod device {
             if SERIAL_PTR.is_null() {
                 return;
             }
-            let _ = (*SERIAL_PTR).write_bytes(bytes);
+            for &b in bytes {
+                let _ = nb::block!((*SERIAL_PTR).write_byte_nb(b));
+            }
         }
     }
 
@@ -424,18 +424,8 @@ mod device {
     }
 
     #[panic_handler]
-    fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
-        // Emit a deterministic crash report via USB Serial/JTAG so the panic
-        // location is visible on the host instead of the device freezing silently.
+    fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
         serial_write_bytes(b"\r\n!!! PANIC !!!\r\n");
-        if let Some(loc) = info.location() {
-            // Format "file:line\r\n" into a small stack buffer; no heap needed.
-            let mut buf = [0u8; 128];
-            let mut cursor = &mut buf[..];
-            let _ = write!(cursor, "{}:{}\r\n", loc.file(), loc.line());
-            let written = 128 - cursor.len();
-            serial_write_bytes(&buf[..written]);
-        }
         loop {
             spin_loop();
         }
@@ -538,7 +528,7 @@ mod device {
             SERIAL_PTR = serial as *mut _;
             set_serial_write_fn(device_serial_write);
         }
-        serial_write_bytes(b"\r\nPaperDOS kernel boot\r\n");
+        esp_println::println!("PaperDOS kernel boot");
 
         let adc1 = unsafe { peripherals.ADC1.clone_unchecked() };
         let gpio1 = unsafe { peripherals.GPIO1.clone_unchecked() };
