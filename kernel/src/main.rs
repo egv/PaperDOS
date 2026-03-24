@@ -9,6 +9,7 @@ mod device {
     use core::cell::RefCell;
     use core::hint::spin_loop;
     use core::{slice, str};
+    use core::fmt::Write as _;
 
     use critical_section::Mutex;
     use embassy_executor::Spawner;
@@ -20,6 +21,7 @@ mod device {
         peripherals::{ADC1, GPIO1, GPIO2},
         spi::{self, master::Config as SpiConfig, Mode},
         timer::timg::TimerGroup, Config,
+        usb_serial_jtag::UsbSerialJtag,
     };
     use esp_hal::delay::Delay;
     use esp_hal::dma::{DmaDescriptor, DmaRxBuf, DmaTxBuf};
@@ -50,6 +52,7 @@ mod device {
     use kernel::syscall::input::{
         button_event_to_mask, button_id_to_mask, set_input_get_buttons_fn, set_input_wait_button_fn,
     };
+    use kernel::device::serial::{serial_write_bytes, set_serial_write_fn};
     use kernel::jump::jump_to_app;
     use kernel::launcher::{format_app_name, run_launcher_with_refresh};
     use static_cell::StaticCell;
@@ -74,6 +77,21 @@ mod device {
         gpio2_decoded: Option<ButtonId>,
         stable: Option<ButtonId>,
         last_event: Option<ButtonEvent>,
+    }
+
+    static SERIAL_CELL: StaticCell<UsbSerialJtag<'static>> = StaticCell::new();
+
+    /// Raw pointer to the live USB Serial/JTAG instance; set once in `main()`.
+    static mut SERIAL_PTR: *mut UsbSerialJtag<'static> = core::ptr::null_mut();
+
+    fn device_serial_write(bytes: &[u8]) {
+        // SAFETY: SERIAL_PTR written once before any task runs; single-core.
+        unsafe {
+            if SERIAL_PTR.is_null() {
+                return;
+            }
+            let _ = (*SERIAL_PTR).write_bytes(bytes);
+        }
     }
 
     static EXECUTOR: StaticCell<esp_rtos::embassy::Executor> = StaticCell::new();
@@ -402,7 +420,18 @@ mod device {
     }
 
     #[panic_handler]
-    fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
+    fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
+        // Emit a deterministic crash report via USB Serial/JTAG so the panic
+        // location is visible on the host instead of the device freezing silently.
+        serial_write_bytes(b"\r\n!!! PANIC !!!\r\n");
+        if let Some(loc) = info.location() {
+            // Format "file:line\r\n" into a small stack buffer; no heap needed.
+            let mut buf = [0u8; 128];
+            let mut cursor = &mut buf[..];
+            let _ = write!(cursor, "{}:{}\r\n", loc.file(), loc.line());
+            let written = 128 - cursor.len();
+            serial_write_bytes(&buf[..written]);
+        }
         loop {
             spin_loop();
         }
@@ -491,6 +520,15 @@ mod device {
     fn main() -> ! {
         let config = Config::default().with_cpu_clock(CpuClock::max());
         let peripherals = esp_hal::init(config);
+
+        // ── G1: USB Serial/JTAG console — must come first so panics can emit ──
+        let serial = SERIAL_CELL.init(UsbSerialJtag::new(peripherals.USB_DEVICE));
+        // SAFETY: written once before any task or panic handler runs; single-core.
+        unsafe {
+            SERIAL_PTR = serial as *mut _;
+            set_serial_write_fn(device_serial_write);
+        }
+        serial_write_bytes(b"\r\nPaperDOS kernel boot\r\n");
 
         let adc1 = unsafe { peripherals.ADC1.clone_unchecked() };
         let gpio1 = unsafe { peripherals.GPIO1.clone_unchecked() };
