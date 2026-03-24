@@ -50,7 +50,7 @@ mod device {
     use kernel::syscall::input::{
         button_event_to_mask, button_id_to_mask, set_input_get_buttons_fn, set_input_wait_button_fn,
     };
-    use kernel::device::serial::{serial_write_bytes, set_serial_write_fn};
+    use kernel::device::serial::{serial_write_bytes, serial_write_fmt, set_serial_write_fn};
     use kernel::jump::jump_to_app;
     use kernel::launcher::{format_app_name, run_launcher_with_refresh};
     use static_cell::StaticCell;
@@ -424,8 +424,9 @@ mod device {
     }
 
     #[panic_handler]
-    fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
+    fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
         serial_write_bytes(b"\r\n!!! PANIC !!!\r\n");
+        serial_write_fmt(format_args!("{}\r\n", info));
         loop {
             spin_loop();
         }
