@@ -15,6 +15,7 @@ static SAW_STAT: AtomicBool = AtomicBool::new(false);
 static SAW_READ: AtomicBool = AtomicBool::new(false);
 
 static SAW_JUMP: AtomicBool = AtomicBool::new(false);
+static SAW_RETURNED: AtomicBool = AtomicBool::new(false);
 
 fn stage_write(bytes: &[u8]) {
     if bytes == b"LAUNCH:select\n" {
@@ -27,6 +28,8 @@ fn stage_write(bytes: &[u8]) {
         SAW_READ.store(true, Ordering::SeqCst);
     } else if bytes == b"LAUNCH:jump\n" {
         SAW_JUMP.store(true, Ordering::SeqCst);
+    } else if bytes == b"LAUNCH:returned\n" {
+        SAW_RETURNED.store(true, Ordering::SeqCst);
     }
 }
 
@@ -135,6 +138,49 @@ fn boot_app_load_and_run_reports_small_scratch_buffer() {
 #[test]
 fn boot_app_test_data_matches_kernel_abi() {
     assert_eq!(PD_ABI_VERSION, 1);
+}
+
+/// Regression: after the loaded application entry returns, the kernel must emit
+/// `LAUNCH:returned`.  On hardware this tag is serial evidence that control
+/// came back cleanly; its absence means the app (or jump) crashed.
+#[test]
+fn jump_path_emits_returned_after_entry_boot_app() {
+    SAW_RETURNED.store(false, Ordering::SeqCst);
+    SAW_JUMP.store(false, Ordering::SeqCst);
+    JUMP_CALLED.store(false, Ordering::SeqCst);
+    // SAFETY: called once per test binary; no concurrent writer.
+    unsafe { set_serial_write_fn(stage_write) };
+
+    let bd = InMemoryBlockDevice::new(common::make_valid_apps_fat16_image());
+    let mut fs = FsState::new(bd);
+    let mut pdb_buf = [0u8; 512];
+    let mut app_region = [0u8; 256];
+    let syscalls = build_syscall_table(0, 0);
+
+    let result = unsafe {
+        load_and_run(
+            &mut fs,
+            b"HELLO   PDB",
+            &mut pdb_buf,
+            &mut app_region,
+            &syscalls,
+            JumpMode::Jump(mock_jump),
+        )
+    };
+
+    assert!(result.is_ok(), "jump path must succeed: {result:?}");
+    assert!(
+        SAW_JUMP.load(Ordering::SeqCst),
+        "LAUNCH:jump must be emitted before entry"
+    );
+    assert!(
+        JUMP_CALLED.load(Ordering::SeqCst),
+        "entry must be invoked"
+    );
+    assert!(
+        SAW_RETURNED.load(Ordering::SeqCst),
+        "LAUNCH:returned must be emitted after control returns — serial evidence of clean return"
+    );
 }
 
 /// Regression: `LAUNCH:jump` must be emitted immediately before the kernel

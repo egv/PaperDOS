@@ -105,6 +105,9 @@ mod device {
     static FS_CELL: StaticCell<DeviceFs> = StaticCell::new();
     static INPUT_CELL: StaticCell<InputPoller<X4AdcSource>> = StaticCell::new();
     static LAUNCHER_BUF_CELL: StaticCell<FrameBuffer> = StaticCell::new();
+    /// Loaded app image lives in IRAM so the CPU can execute it directly.
+    /// Default DRAM is non-executable on ESP32-C3, causing a fault on jump.
+    #[link_section = ".iram0.bss"]
     static APP_REGION_CELL: StaticCell<[u8; APP_REGION_BYTES]> = StaticCell::new();
     static PDB_BUF_CELL: StaticCell<[u8; PDB_BUF_BYTES]> = StaticCell::new();
     static SPI_BUS_CELL: StaticCell<SharedSpiMutex> = StaticCell::new();
