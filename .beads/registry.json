@@ -1,0 +1,18 @@
+[
+  {
+    "workspace_path": "/Users/egv/dev/yolo-runner",
+    "socket_path": "/Users/egv/dev/yolo-runner/.beads/bd.sock",
+    "database_path": "/Users/egv/dev/yolo-runner/.beads/beads.db",
+    "pid": 9648,
+    "version": "0.47.2",
+    "started_at": "2026-01-18T21:31:27.917062+03:00"
+  },
+  {
+    "workspace_path": "/Users/egv/dev/algi",
+    "socket_path": "/Users/egv/dev/algi/.beads/bd.sock",
+    "database_path": "/Users/egv/dev/algi/.beads/beads.db",
+    "pid": 49846,
+    "version": "0.47.2",
+    "started_at": "2026-03-22T16:50:36.721891+03:00"
+  }
+]
