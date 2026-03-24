@@ -14,6 +14,8 @@ static SAW_OPEN: AtomicBool = AtomicBool::new(false);
 static SAW_STAT: AtomicBool = AtomicBool::new(false);
 static SAW_READ: AtomicBool = AtomicBool::new(false);
 
+static SAW_NO_JUMP_OK: AtomicBool = AtomicBool::new(false);
+
 fn stage_write(bytes: &[u8]) {
     if bytes == b"LAUNCH:select\n" {
         SAW_SELECT.store(true, Ordering::SeqCst);
@@ -23,6 +25,8 @@ fn stage_write(bytes: &[u8]) {
         SAW_OPEN.store(true, Ordering::SeqCst);
     } else if bytes == b"LAUNCH:read\n" {
         SAW_READ.store(true, Ordering::SeqCst);
+    } else if bytes == b"NO_JUMP_OK\n" {
+        SAW_NO_JUMP_OK.store(true, Ordering::SeqCst);
     }
 }
 
@@ -131,4 +135,35 @@ fn boot_app_load_and_run_reports_small_scratch_buffer() {
 #[test]
 fn boot_app_test_data_matches_kernel_abi() {
     assert_eq!(PD_ABI_VERSION, 1);
+}
+
+/// `DryRun` mode must emit the `NO_JUMP_OK` marker after a successful load.
+#[test]
+fn dry_run_emits_no_jump_ok_marker() {
+    SAW_NO_JUMP_OK.store(false, Ordering::SeqCst);
+    // SAFETY: called once per test binary; no concurrent writer.
+    unsafe { set_serial_write_fn(stage_write) };
+
+    let bd = InMemoryBlockDevice::new(common::make_valid_apps_fat16_image());
+    let mut fs = FsState::new(bd);
+    let mut pdb_buf = [0u8; 512];
+    let mut app_region = [0u8; 256];
+    let syscalls = build_syscall_table(0, 0);
+
+    let result = unsafe {
+        load_and_run(
+            &mut fs,
+            b"HELLO   PDB",
+            &mut pdb_buf,
+            &mut app_region,
+            &syscalls,
+            JumpMode::DryRun,
+        )
+    };
+
+    assert!(result.is_ok(), "DryRun must succeed: {result:?}");
+    assert!(
+        SAW_NO_JUMP_OK.load(Ordering::SeqCst),
+        "NO_JUMP_OK must be logged in DryRun mode"
+    );
 }

@@ -68,6 +68,9 @@ where
         JumpMode::DryRun => noop_jump,
     };
     unsafe { loader::load_and_run(&pdb_buf[..size], app_region, syscalls as *const _, jump_fn) }?;
+    if mode == JumpMode::DryRun {
+        serial_write_bytes(b"NO_JUMP_OK\n");
+    }
     Ok(())
 }
 
