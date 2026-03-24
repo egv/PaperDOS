@@ -14,7 +14,7 @@ static SAW_OPEN: AtomicBool = AtomicBool::new(false);
 static SAW_STAT: AtomicBool = AtomicBool::new(false);
 static SAW_READ: AtomicBool = AtomicBool::new(false);
 
-static SAW_NO_JUMP_OK: AtomicBool = AtomicBool::new(false);
+static SAW_JUMP: AtomicBool = AtomicBool::new(false);
 
 fn stage_write(bytes: &[u8]) {
     if bytes == b"LAUNCH:select\n" {
@@ -25,8 +25,8 @@ fn stage_write(bytes: &[u8]) {
         SAW_OPEN.store(true, Ordering::SeqCst);
     } else if bytes == b"LAUNCH:read\n" {
         SAW_READ.store(true, Ordering::SeqCst);
-    } else if bytes == b"NO_JUMP_OK\n" {
-        SAW_NO_JUMP_OK.store(true, Ordering::SeqCst);
+    } else if bytes == b"LAUNCH:jump\n" {
+        SAW_JUMP.store(true, Ordering::SeqCst);
     }
 }
 
@@ -137,10 +137,13 @@ fn boot_app_test_data_matches_kernel_abi() {
     assert_eq!(PD_ABI_VERSION, 1);
 }
 
-/// `DryRun` mode must emit the `NO_JUMP_OK` marker after a successful load.
+/// Regression: `LAUNCH:jump` must be emitted immediately before the kernel
+/// transfers control to the loaded application entry point.  This is the last
+/// observable serial stage before a jump-path crash; if hardware stops here
+/// the failing seam is the jump itself, not the load or prepare stage.
 #[test]
-fn dry_run_emits_no_jump_ok_marker() {
-    SAW_NO_JUMP_OK.store(false, Ordering::SeqCst);
+fn dry_run_jump_boundary_is_emitted() {
+    SAW_JUMP.store(false, Ordering::SeqCst);
     // SAFETY: called once per test binary; no concurrent writer.
     unsafe { set_serial_write_fn(stage_write) };
 
@@ -163,7 +166,7 @@ fn dry_run_emits_no_jump_ok_marker() {
 
     assert!(result.is_ok(), "DryRun must succeed: {result:?}");
     assert!(
-        SAW_NO_JUMP_OK.load(Ordering::SeqCst),
-        "NO_JUMP_OK must be logged in DryRun mode"
+        SAW_JUMP.load(Ordering::SeqCst),
+        "LAUNCH:jump must be logged — this is the failing launch boundary"
     );
 }
