@@ -29,7 +29,7 @@ mod device {
     use esp_hal::time::Rate;
     use esp_hal::Blocking;
     use kernel::abi::{PdDirent, PD_FTYPE_DIR, PD_FTYPE_FILE};
-    use kernel::boot_app::load_and_run;
+    use kernel::boot_app::{load_and_run, JumpMode};
     use kernel::device::display::X4DisplayTransport;
     use kernel::device::raw_gpio::RawOutputPin;
     use kernel::device::storage::{RuntimeSdFs, SdSpiDevice};
@@ -68,6 +68,10 @@ mod device {
     const PDB_BUF_BYTES: usize = 64 * 1024;
     const ADC_OVERSAMPLE: u32 = 4;
     const BUTTON_DIAGNOSTIC_MODE: bool = false;
+    /// When `true`, the kernel loads and prepares the selected app but does not
+    /// jump to its entry point.  Set to `true` to isolate crashes that occur
+    /// inside `jump_to_app` vs. those that occur in the load/prepare path.
+    const LAUNCH_DRY_RUN: bool = false;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     struct ButtonDiagSnapshot {
@@ -510,8 +514,14 @@ mod device {
 
             loop {
                 let filename = run_launcher_with_refresh(fs, launcher_buf, device_refresh_frame);
+                serial_write_bytes(b"LAUNCH:confirm\n");
                 let syscalls = build_syscall_table(app_region.as_ptr() as u32, app_region.len() as u32);
-                let _ = load_and_run(fs, &filename, pdb_buf, app_region, &syscalls, jump_to_app);
+                let mode = if LAUNCH_DRY_RUN {
+                    JumpMode::DryRun
+                } else {
+                    JumpMode::Jump(jump_to_app)
+                };
+                let _ = load_and_run(fs, &filename, pdb_buf, app_region, &syscalls, mode);
             }
         }
     }

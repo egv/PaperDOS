@@ -489,6 +489,95 @@ pub fn make_apps_fat16_image() -> Vec<Block> {
     blocks
 }
 
+/// Build a FAT16 disk image containing two valid `.PDB` files in the root directory.
+///
+/// Unlike `make_apps_fat16_image`, each file holds a fully-valid PDB produced by
+/// `make_min_pdb`, so the loader can parse and relocate them.
+///
+/// Layout (device LBAs, same BPB as `make_test_fat16_image`):
+///  0  : MBR  — FAT16, LBA start=1, size=4200
+///  1  : Boot sector
+///  2-18: FAT — clusters 2 and 3 marked end-of-chain
+///  19 : Root directory — HELLO.PDB (cluster 2) + WORLD.PDB (cluster 3)
+///  20 : Cluster 2 — `make_min_pdb(&[0u8; 4])` image
+///  21 : Cluster 3 — `make_min_pdb(&[1u8, 2, 3, 4])` image
+pub fn make_valid_apps_fat16_image() -> Vec<Block> {
+    let hello = make_min_pdb(&[0u8; 4]);
+    let world = make_min_pdb(&[1u8, 2, 3, 4]);
+    assert!(hello.len() <= 512);
+    assert!(world.len() <= 512);
+
+    const TOTAL: usize = 4201;
+    let mut blocks = vec![Block::new(); TOTAL];
+
+    {
+        let b = &mut blocks[0].contents;
+        b[446] = 0x00;
+        b[447] = 0x00;
+        b[448] = 0x01;
+        b[449] = 0x00;
+        b[450] = 0x06;
+        b[454] = 0x01;
+        b[458] = 0x68;
+        b[459] = 0x10;
+        b[510] = 0x55;
+        b[511] = 0xAA;
+    }
+
+    {
+        let b = &mut blocks[1].contents;
+        b[0] = 0xEB;
+        b[1] = 0x3C;
+        b[2] = 0x90;
+        b[3..11].copy_from_slice(b"PAPERDOS");
+        b[11] = 0x00;
+        b[12] = 0x02;
+        b[13] = 0x01;
+        b[14] = 0x01;
+        b[16] = 0x01;
+        b[17] = 0x10;
+        b[19] = 0x68;
+        b[20] = 0x10;
+        b[21] = 0xF8;
+        b[22] = 0x11;
+        b[24] = 0x01;
+        b[26] = 0x01;
+        b[510] = 0x55;
+        b[511] = 0xAA;
+    }
+
+    {
+        let b = &mut blocks[2].contents;
+        b[0] = 0xF8;
+        b[1] = 0xFF;
+        b[2] = 0xFF;
+        b[3] = 0xFF;
+        b[4] = 0xFF;
+        b[5] = 0xFF;
+        b[6] = 0xFF;
+        b[7] = 0xFF;
+    }
+
+    {
+        let b = &mut blocks[19].contents;
+        b[0x00..0x08].copy_from_slice(b"HELLO   ");
+        b[0x08..0x0B].copy_from_slice(b"PDB");
+        b[0x0B] = 0x20;
+        b[0x1A] = 0x02;
+        b[0x1C..0x20].copy_from_slice(&(hello.len() as u32).to_le_bytes());
+
+        b[0x20..0x28].copy_from_slice(b"WORLD   ");
+        b[0x28..0x2B].copy_from_slice(b"PDB");
+        b[0x2B] = 0x20;
+        b[0x3A] = 0x03;
+        b[0x3C..0x40].copy_from_slice(&(world.len() as u32).to_le_bytes());
+    }
+
+    blocks[20].contents[..hello.len()].copy_from_slice(&hello);
+    blocks[21].contents[..world.len()].copy_from_slice(&world);
+    blocks
+}
+
 impl DisplayTransport for RecordingTransport {
     type Error = ();
 
