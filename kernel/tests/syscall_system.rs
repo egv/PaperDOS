@@ -1,4 +1,4 @@
-use kernel::abi::{PD_ABI_VERSION, PdSyscalls};
+use kernel::abi::{PdSyscalls, PD_ABI_VERSION};
 use kernel::syscall::build_syscall_table;
 use kernel::syscall::font::pd_font_load;
 use kernel::syscall::mem::pd_mem_alloc;

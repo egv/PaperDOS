@@ -170,7 +170,10 @@ fn partial_window_write_encodes_high_row_y_address() {
 
     write_partial(&mut transport, &region, &payload).unwrap();
 
-    assert_eq!(transport.ops[3], RecordedOp::Data(vec![0x2C, 0x01, 0x2D, 0x01])); // SET_RAM_Y_RANGE
+    assert_eq!(
+        transport.ops[3],
+        RecordedOp::Data(vec![0x2C, 0x01, 0x2D, 0x01])
+    ); // SET_RAM_Y_RANGE
     assert_eq!(transport.ops[7], RecordedOp::Data(vec![0x2C, 0x01])); // SET_RAM_Y_COUNTER
 }
 

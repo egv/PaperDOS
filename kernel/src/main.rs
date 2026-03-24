@@ -11,25 +11,29 @@ mod device {
     use core::{slice, str};
     use critical_section::Mutex;
     use embassy_executor::Spawner;
-    use embedded_sdmmc::sdcard::DummyCsPin;
     use embedded_hal_bus::spi::CriticalSectionDevice;
-    use esp_hal::{
-        analog::adc::{Adc, AdcCalCurve, AdcConfig, AdcPin, Attenuation},
-        clock::CpuClock, interrupt::software::SoftwareInterruptControl, main,
-        peripherals::{ADC1, GPIO1, GPIO2},
-        spi::{self, master::Config as SpiConfig, Mode},
-        timer::timg::TimerGroup, Config,
-        usb_serial_jtag::UsbSerialJtag,
-    };
+    use embedded_sdmmc::sdcard::DummyCsPin;
     use esp_hal::delay::Delay;
     use esp_hal::dma::{DmaDescriptor, DmaRxBuf, DmaTxBuf};
     use esp_hal::gpio::{Level, Output, OutputConfig};
     use esp_hal::time::Rate;
     use esp_hal::Blocking;
+    use esp_hal::{
+        analog::adc::{Adc, AdcCalCurve, AdcConfig, AdcPin, Attenuation},
+        clock::CpuClock,
+        interrupt::software::SoftwareInterruptControl,
+        main,
+        peripherals::{ADC1, GPIO1, GPIO2},
+        spi::{self, master::Config as SpiConfig, Mode},
+        timer::timg::TimerGroup,
+        usb_serial_jtag::UsbSerialJtag,
+        Config,
+    };
     use kernel::abi::{PdDirent, PD_FTYPE_DIR, PD_FTYPE_FILE};
     use kernel::boot_app::{load_and_run, JumpMode};
     use kernel::device::display::X4DisplayTransport;
     use kernel::device::raw_gpio::RawOutputPin;
+    use kernel::device::serial::{serial_write_bytes, serial_write_fmt, set_serial_write_fn};
     use kernel::device::storage::{RuntimeSdFs, SdSpiDevice};
     use kernel::display::ssd1677::{
         emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
@@ -37,9 +41,11 @@ mod device {
     use kernel::input::adc::AdcSource;
     use kernel::input::poller::InputPoller;
     use kernel::input::{ButtonEvent, ButtonId};
+    use kernel::jump::jump_to_app;
     use kernel::launcher::draw_text;
-    use kernel::storage::fs::{DirHandle, PdDirEntry};
+    use kernel::launcher::{format_app_name, run_launcher_with_refresh};
     use kernel::storage::fs::EntryType;
+    use kernel::storage::fs::{DirHandle, PdDirEntry};
     use kernel::storage::StorageError;
     use kernel::syscall::build_syscall_table;
     use kernel::syscall::display::{
@@ -50,15 +56,11 @@ mod device {
     use kernel::syscall::input::{
         button_event_to_mask, button_id_to_mask, set_input_get_buttons_fn, set_input_wait_button_fn,
     };
-    use kernel::device::serial::{serial_write_bytes, serial_write_fmt, set_serial_write_fn};
-    use kernel::jump::jump_to_app;
-    use kernel::launcher::{format_app_name, run_launcher_with_refresh};
     use static_cell::StaticCell;
 
     type SharedSpiBus = spi::master::SpiDmaBus<'static, Blocking>;
     type SharedSpiMutex = Mutex<RefCell<SharedSpiBus>>;
-    type DisplaySpi =
-        CriticalSectionDevice<'static, SharedSpiBus, Output<'static>, Delay>;
+    type DisplaySpi = CriticalSectionDevice<'static, SharedSpiBus, Output<'static>, Delay>;
     type DeviceDisplay = X4DisplayTransport<DisplaySpi>;
     type DeviceFs = RuntimeSdFs<Delay>;
 
@@ -136,20 +138,10 @@ mod device {
     }
 
     impl X4AdcSource {
-        fn new(
-            adc1: ADC1<'static>,
-            gpio1: GPIO1<'static>,
-            gpio2: GPIO2<'static>,
-        ) -> Self {
+        fn new(adc1: ADC1<'static>, gpio1: GPIO1<'static>, gpio2: GPIO2<'static>) -> Self {
             let mut cfg = AdcConfig::new();
-            let row1 = cfg.enable_pin_with_cal::<_, AdcCalCurve<ADC1>>(
-                gpio1,
-                Attenuation::_11dB,
-            );
-            let row2 = cfg.enable_pin_with_cal::<_, AdcCalCurve<ADC1>>(
-                gpio2,
-                Attenuation::_11dB,
-            );
+            let row1 = cfg.enable_pin_with_cal::<_, AdcCalCurve<ADC1>>(gpio1, Attenuation::_11dB);
+            let row2 = cfg.enable_pin_with_cal::<_, AdcCalCurve<ADC1>>(gpio2, Attenuation::_11dB);
             let adc = Adc::new(adc1, cfg);
 
             Self { adc, row1, row2 }
@@ -302,7 +294,13 @@ mod device {
 
         draw_text(buf, 16, 524, b"EVENT", 0x00);
         draw_text(buf, 16, 560, event_name(snap.last_event), 0x00);
-        draw_text(buf, 16, 596, button_name(event_button(snap.last_event)), 0x00);
+        draw_text(
+            buf,
+            16,
+            596,
+            button_name(event_button(snap.last_event)),
+            0x00,
+        );
 
         draw_text(buf, 16, 704, b"VOLUP VOLDOWN", 0x00);
         draw_text(buf, 16, 740, b"CONFIRM BACK", 0x00);
@@ -358,9 +356,11 @@ mod device {
                     return 0;
                 }
                 match (*INPUT_PTR).poll() {
-                    Ok(Some(event @ (ButtonEvent::Press(_)
-                    | ButtonEvent::LongPress(_)
-                    | ButtonEvent::Repeat(_)))) => return button_event_to_mask(event),
+                    Ok(Some(
+                        event @ (ButtonEvent::Press(_)
+                        | ButtonEvent::LongPress(_)
+                        | ButtonEvent::Repeat(_)),
+                    )) => return button_event_to_mask(event),
                     Ok(Some(ButtonEvent::Release(_))) | Ok(None) | Err(_) => {}
                 }
             }
@@ -375,7 +375,12 @@ mod device {
         let Ok(path) = str::from_utf8(unsafe { slice::from_raw_parts(path, len) }) else {
             return -1;
         };
-        unsafe { (&mut *FS_PTR).fs_opendir(path).map(|h| h.to_raw()).unwrap_or(-1) }
+        unsafe {
+            (&mut *FS_PTR)
+                .fs_opendir(path)
+                .map(|h| h.to_raw())
+                .unwrap_or(-1)
+        }
     }
 
     unsafe fn device_readdir(handle: i32, dirent_buf: *mut u8) -> i32 {
@@ -506,7 +511,8 @@ mod device {
             loop {
                 let filename = run_launcher_with_refresh(fs, launcher_buf, device_refresh_frame);
                 serial_write_bytes(b"LAUNCH:confirm\n");
-                let syscalls = build_syscall_table(app_region.as_ptr() as u32, app_region.len() as u32);
+                let syscalls =
+                    build_syscall_table(app_region.as_ptr() as u32, app_region.len() as u32);
                 let mode = if LAUNCH_DRY_RUN {
                     JumpMode::DryRun
                 } else {
@@ -565,12 +571,8 @@ mod device {
         let fs = if BUTTON_DIAGNOSTIC_MODE {
             Err(BootFailureKind::None)
         } else {
-            let sd_spi: SdSpiDevice<'static, Delay> = CriticalSectionDevice::new(
-                spi_ref,
-                DummyCsPin,
-                Delay::new(),
-            )
-            .unwrap();
+            let sd_spi: SdSpiDevice<'static, Delay> =
+                CriticalSectionDevice::new(spi_ref, DummyCsPin, Delay::new()).unwrap();
             DeviceFs::from_spi2(
                 sd_spi,
                 // SAFETY: GPIO12 is free for SD CS on the X4 in DIO flash mode.
@@ -604,7 +606,9 @@ mod device {
         let fs_ref = match fs {
             Ok(fs) => FS_CELL.init(fs) as *mut _,
             Err(failure) => {
-                unsafe { BOOT_FAILURE = failure; }
+                unsafe {
+                    BOOT_FAILURE = failure;
+                }
                 core::ptr::null_mut()
             }
         };

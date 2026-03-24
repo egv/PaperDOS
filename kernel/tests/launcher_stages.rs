@@ -23,7 +23,6 @@ static SAW_PREPARE: AtomicBool = AtomicBool::new(false);
 static SAW_JUMP: AtomicBool = AtomicBool::new(false);
 static JUMP_FN_CALLED: AtomicBool = AtomicBool::new(false);
 
-
 fn stage_recording_write(bytes: &[u8]) {
     if bytes == b"LAUNCH:select\n" {
         SAW_SELECT.store(true, Ordering::SeqCst);
@@ -75,12 +74,30 @@ fn all_stages_logged_for_valid_pdb_launcher_stages() {
     };
 
     assert!(result.is_ok(), "valid PDB must load: {result:?}");
-    assert!(JUMP_FN_CALLED.load(Ordering::SeqCst), "jump function must be called");
-    assert!(SAW_SELECT.load(Ordering::SeqCst), "LAUNCH:select must be logged");
-    assert!(SAW_OPEN.load(Ordering::SeqCst), "LAUNCH:open must be logged");
-    assert!(SAW_READ.load(Ordering::SeqCst), "LAUNCH:read must be logged");
-    assert!(SAW_PREPARE.load(Ordering::SeqCst), "LAUNCH:prepare must be logged");
-    assert!(SAW_JUMP.load(Ordering::SeqCst), "LAUNCH:jump must be logged");
+    assert!(
+        JUMP_FN_CALLED.load(Ordering::SeqCst),
+        "jump function must be called"
+    );
+    assert!(
+        SAW_SELECT.load(Ordering::SeqCst),
+        "LAUNCH:select must be logged"
+    );
+    assert!(
+        SAW_OPEN.load(Ordering::SeqCst),
+        "LAUNCH:open must be logged"
+    );
+    assert!(
+        SAW_READ.load(Ordering::SeqCst),
+        "LAUNCH:read must be logged"
+    );
+    assert!(
+        SAW_PREPARE.load(Ordering::SeqCst),
+        "LAUNCH:prepare must be logged"
+    );
+    assert!(
+        SAW_JUMP.load(Ordering::SeqCst),
+        "LAUNCH:jump must be logged"
+    );
 }
 
 /// DryRun mode must load and prepare the image and return `Ok(())` without
@@ -117,7 +134,16 @@ fn dry_run_loads_without_calling_jump_launcher_stages() {
     };
 
     assert!(result.is_ok(), "dry-run must succeed: {result:?}");
-    assert!(SAW_SELECT.load(Ordering::SeqCst), "LAUNCH:select must be logged in dry-run");
-    assert!(SAW_PREPARE.load(Ordering::SeqCst), "LAUNCH:prepare must be logged in dry-run");
-    assert!(SAW_JUMP.load(Ordering::SeqCst), "LAUNCH:jump must be logged in dry-run");
+    assert!(
+        SAW_SELECT.load(Ordering::SeqCst),
+        "LAUNCH:select must be logged in dry-run"
+    );
+    assert!(
+        SAW_PREPARE.load(Ordering::SeqCst),
+        "LAUNCH:prepare must be logged in dry-run"
+    );
+    assert!(
+        SAW_JUMP.load(Ordering::SeqCst),
+        "LAUNCH:jump must be logged in dry-run"
+    );
 }

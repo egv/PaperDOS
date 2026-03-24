@@ -23,8 +23,8 @@ fn make_read_spi(data: &[u8; 512]) -> MockSpi {
 /// Reply: R1=0x00, then data response token 0xE5 (accepted), then busy (0x00 × N, 0xFF ready).
 fn make_write_spi() -> MockSpi {
     MockSpi::new(&[
-        &[0xFF, 0x00],           // CMD24 R1
-        &[0xE5, 0xFF],           // data response token + not busy
+        &[0xFF, 0x00], // CMD24 R1
+        &[0xE5, 0xFF], // data response token + not busy
     ])
 }
 
@@ -50,7 +50,10 @@ fn write_block_sends_data_token_and_payload_storage_sd_rw() {
     // Verify that sent bytes include the data token 0xFE followed by the 512 data bytes
     let sent = card.into_spi().sent;
     // CMD24 = 6 bytes, then data token 0xFE, then 512 bytes, then 2 CRC bytes
-    let token_pos = sent.iter().position(|&b| b == 0xFE).expect("data token not found");
+    let token_pos = sent
+        .iter()
+        .position(|&b| b == 0xFE)
+        .expect("data token not found");
     assert_eq!(&sent[token_pos + 1..token_pos + 513], &data[..]);
 }
 
@@ -69,11 +72,11 @@ fn make_sdsc_read_spi(data: &[u8; 512]) -> MockSpi {
     read_reply.extend_from_slice(data);
     read_reply.extend_from_slice(&[0x00, 0x00]); // CRC
     MockSpi::new(&[
-        &[],                                          // preamble
-        &[0xFF, 0xFF, 0x01],                          // CMD0
+        &[],                                         // preamble
+        &[0xFF, 0xFF, 0x01],                         // CMD0
         &[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA], // CMD8
-        &[0xFF, 0xFF, 0x01],                          // CMD55
-        &[0xFF, 0xFF, 0x00],                          // ACMD41 ready
+        &[0xFF, 0xFF, 0x01],                         // CMD55
+        &[0xFF, 0xFF, 0x00],                         // ACMD41 ready
         &[0xFF, 0xFF, 0x00, 0x80, 0x00, 0x00, 0x00], // CMD58 CCS=0 → SDSC
         &read_reply,
     ])
@@ -89,8 +92,8 @@ fn make_sdsc_write_spi() -> MockSpi {
         &[0xFF, 0xFF, 0x01],
         &[0xFF, 0xFF, 0x00],
         &[0xFF, 0xFF, 0x00, 0x80, 0x00, 0x00, 0x00],
-        &[0xFF, 0x00],   // CMD24 R1
-        &[0xE5, 0xFF],   // data response token
+        &[0xFF, 0x00], // CMD24 R1
+        &[0xE5, 0xFF], // data response token
     ])
 }
 
@@ -111,8 +114,11 @@ fn sdsc_read_block_uses_byte_address_storage_sd_rw() {
     let cmd17_start = 40; // 10 + 5×6
     assert_eq!(sent[cmd17_start], 0x40 | 17, "CMD17 opcode");
     // Argument bytes: 0x00 0x00 0x02 0x00  (512 = 0x00000200, big-endian)
-    assert_eq!(&sent[cmd17_start + 1..cmd17_start + 5], &[0x00, 0x00, 0x02, 0x00],
-        "SDSC CMD17 arg must be byte address (LBA×512)");
+    assert_eq!(
+        &sent[cmd17_start + 1..cmd17_start + 5],
+        &[0x00, 0x00, 0x02, 0x00],
+        "SDSC CMD17 arg must be byte address (LBA×512)"
+    );
 }
 
 #[test]
@@ -128,6 +134,9 @@ fn sdsc_write_block_uses_byte_address_storage_sd_rw() {
     let cmd24_start = 40; // 10 + 5×6
     assert_eq!(sent[cmd24_start], 0x40 | 24, "CMD24 opcode");
     // Byte address = 2×512 = 1024 = 0x00000400
-    assert_eq!(&sent[cmd24_start + 1..cmd24_start + 5], &[0x00, 0x00, 0x04, 0x00],
-        "SDSC CMD24 arg must be byte address (LBA×512)");
+    assert_eq!(
+        &sent[cmd24_start + 1..cmd24_start + 5],
+        &[0x00, 0x00, 0x04, 0x00],
+        "SDSC CMD24 arg must be byte address (LBA×512)"
+    );
 }

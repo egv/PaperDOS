@@ -15,8 +15,8 @@ fn fs_state_constructs_without_panic_storage_fs_state() {
 
 #[test]
 fn noop_time_source_returns_zero_timestamp_storage_fs_state() {
-    use kernel::storage::fs::NoopTimeSource;
     use embedded_sdmmc::TimeSource;
+    use kernel::storage::fs::NoopTimeSource;
     let ts = NoopTimeSource;
     let t = ts.get_timestamp();
     // NoopTimeSource returns the epoch / zeroed timestamp

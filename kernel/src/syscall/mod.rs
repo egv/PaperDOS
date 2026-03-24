@@ -6,7 +6,7 @@ pub mod mem;
 pub mod net;
 pub mod sys;
 
-use crate::abi::{PD_ABI_VERSION, PdSyscalls};
+use crate::abi::{PdSyscalls, PD_ABI_VERSION};
 use display::{
     pd_display_clear, pd_display_draw_bitmap, pd_display_draw_rect, pd_display_draw_text,
     pd_display_fill_rect, pd_display_height, pd_display_refresh, pd_display_set_pixel,
@@ -25,8 +25,8 @@ use net::{
     pd_net_wifi_disconnect, pd_net_wifi_status,
 };
 use sys::{
-    pd_sys_exit, pd_sys_get_free_heap, pd_sys_log, pd_sys_millis, pd_sys_reboot,
-    pd_sys_sleep_ms, pd_sys_wifi_acquire, pd_sys_wifi_release,
+    pd_sys_exit, pd_sys_get_free_heap, pd_sys_log, pd_sys_millis, pd_sys_reboot, pd_sys_sleep_ms,
+    pd_sys_wifi_acquire, pd_sys_wifi_release,
 };
 
 /// Build a fully-populated [`PdSyscalls`] table.

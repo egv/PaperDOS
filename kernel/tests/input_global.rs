@@ -3,8 +3,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use kernel::syscall::input::{
-    pd_input_get_buttons, pd_input_wait_button, set_input_get_buttons_fn,
-    set_input_wait_button_fn,
+    pd_input_get_buttons, pd_input_wait_button, set_input_get_buttons_fn, set_input_wait_button_fn,
 };
 
 static CALL_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -25,12 +24,19 @@ fn pd_input_get_buttons_delegates_to_registered_fn_input_global() {
     unsafe { set_input_get_buttons_fn(mock_buttons) };
     let result = pd_input_get_buttons();
     assert_eq!(result, 0b0000_0001, "must return value from registered fn");
-    assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1, "registered fn must be called once");
+    assert_eq!(
+        CALL_COUNT.load(Ordering::SeqCst),
+        1,
+        "registered fn must be called once"
+    );
 }
 
 #[test]
 fn pd_input_wait_button_delegates_to_registered_fn_input_global() {
     unsafe { set_input_wait_button_fn(mock_wait) };
     let result = pd_input_wait_button();
-    assert_eq!(result, 0b0000_0010, "must return value from registered wait fn");
+    assert_eq!(
+        result, 0b0000_0010,
+        "must return value from registered wait fn"
+    );
 }

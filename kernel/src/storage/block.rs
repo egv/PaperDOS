@@ -17,7 +17,10 @@ pub struct SdBlockDevice<SPI> {
 
 impl<SPI: SpiDevice> SdBlockDevice<SPI> {
     pub fn new(sd: SdCard<SPI>, block_count: u32) -> Self {
-        Self { sd: RefCell::new(sd), block_count }
+        Self {
+            sd: RefCell::new(sd),
+            block_count,
+        }
     }
 
     /// Consume the adapter and return the inner [`SdCard`].

@@ -35,7 +35,10 @@ fn pd_fs_readdir_delegates_to_registered_fn_fs_global() {
     let mut dirent = [0u8; 264];
     unsafe { set_fs_readdir_fn(mock_readdir) };
     let result = unsafe { pd_fs_readdir(7, dirent.as_mut_ptr()) };
-    assert_eq!(result, 1, "must return end-of-dir from registered readdir fn");
+    assert_eq!(
+        result, 1,
+        "must return end-of-dir from registered readdir fn"
+    );
 }
 
 #[test]

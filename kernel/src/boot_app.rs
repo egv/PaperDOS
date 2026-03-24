@@ -79,12 +79,12 @@ fn load_pdb<D: BlockDevice>(
 where
     D::Error: core::fmt::Debug,
 {
-    serial_write_bytes(b"LAUNCH:open\n");
     let mut name = [0u8; 13];
     let len = format_app_name(filename, &mut name);
     let path = core::str::from_utf8(&name[..len]).map_err(|_| StorageError::InvalidFormat)?;
 
     let stat = fs.fs_stat(path)?;
+    serial_write_bytes(b"LAUNCH:stat\n");
     let size = stat.size as usize;
     if size > pdb_buf.len() {
         return Err(LoadAndRunError::FileTooLarge {
@@ -94,6 +94,7 @@ where
     }
 
     let handle = fs.fs_open(path, false)?;
+    serial_write_bytes(b"LAUNCH:open\n");
     let result = (|| {
         let mut read = 0usize;
         while read < size {

@@ -14,11 +14,11 @@ use kernel::storage::sd::{CardKind, SdCard};
 /// 5: CMD58 (READ_OCR) → R3 = [0x00, 0xC0, 0x00, 0x00, 0x00] (CCS=1 → SDHC)
 fn make_sdhc_spi() -> MockSpi {
     MockSpi::new(&[
-        &[],                                          // preamble — no reply
-        &[0xFF, 0xFF, 0x01],                          // CMD0 response (0x01 = idle)
+        &[],                                         // preamble — no reply
+        &[0xFF, 0xFF, 0x01],                         // CMD0 response (0x01 = idle)
         &[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA], // CMD8 R7
-        &[0xFF, 0xFF, 0x01],                          // CMD55 R1
-        &[0xFF, 0xFF, 0x00],                          // ACMD41 R1 = ready (no delay needed)
+        &[0xFF, 0xFF, 0x01],                         // CMD55 R1
+        &[0xFF, 0xFF, 0x00],                         // ACMD41 R1 = ready (no delay needed)
         &[0xFF, 0xFF, 0x00, 0xC0, 0x00, 0x00, 0x00], // CMD58 R3 (CCS=1)
     ])
 }
@@ -36,11 +36,11 @@ fn sd_init_not_ready_returns_err_storage_sd_init() {
     // a 50 ms delay transaction.  With ACMD41_MAX_RETRIES = 20 the sequence is:
     // preamble + CMD0 + CMD8 + 20 × (CMD55 + ACMD41 + delay) = 63 transactions.
     let mut replies: Vec<&[u8]> = Vec::new();
-    replies.push(&[]);                                          // preamble
-    replies.push(&[0xFF, 0xFF, 0x01]);                         // CMD0
+    replies.push(&[]); // preamble
+    replies.push(&[0xFF, 0xFF, 0x01]); // CMD0
     replies.push(&[0xFF, 0xFF, 0x01, 0x00, 0x00, 0x01, 0xAA]); // CMD8
-    // Pre-load enough CMD55/ACMD41/delay triples so MockSpi returns the right
-    // replies in order.  Static slices live for the duration of the test.
+                                                               // Pre-load enough CMD55/ACMD41/delay triples so MockSpi returns the right
+                                                               // replies in order.  Static slices live for the duration of the test.
     const CMD55_BUSY: &[u8] = &[0xFF, 0xFF, 0x01];
     const ACMD41_BUSY: &[u8] = &[0xFF, 0xFF, 0x01];
     const DELAY_EMPTY: &[u8] = &[];
