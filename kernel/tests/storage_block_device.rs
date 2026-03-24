@@ -53,6 +53,9 @@ fn block_device_write_sends_correct_payload_storage_block_device() {
     bd.write(&[block], BlockIdx(7)).unwrap();
     let sent = bd.into_sd().into_spi().sent;
     // Find data token 0xFE and verify 512 bytes follow it
-    let token_pos = sent.iter().position(|&b| b == 0xFE).expect("data token 0xFE not in sent");
+    let token_pos = sent
+        .iter()
+        .position(|&b| b == 0xFE)
+        .expect("data token 0xFE not in sent");
     assert_eq!(&sent[token_pos + 1..token_pos + 513], &payload[..]);
 }

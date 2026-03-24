@@ -26,11 +26,12 @@ fn load_and_run_calls_jump_on_valid_pdb_app_load_run() {
     let pdb = common::make_min_pdb(&[0u8; 4]);
     let mut region = vec![0u8; 256];
     // SAFETY: mock_jump does not execute any code.
-    let result = unsafe {
-        load_and_run(&pdb, &mut region, core::ptr::null(), mock_jump)
-    };
+    let result = unsafe { load_and_run(&pdb, &mut region, core::ptr::null(), mock_jump) };
     assert!(result.is_ok(), "valid PDB must succeed: {result:?}");
-    assert!(JUMP_CALLED.load(Ordering::SeqCst), "jump must be called for a valid PDB");
+    assert!(
+        JUMP_CALLED.load(Ordering::SeqCst),
+        "jump must be called for a valid PDB"
+    );
 }
 
 #[test]
@@ -38,9 +39,7 @@ fn load_and_run_returns_error_for_bad_magic_app_load_run() {
     let mut pdb = common::make_min_pdb(&[0u8; 4]);
     pdb[0] = 0x00; // corrupt magic
     let mut region = vec![0u8; 256];
-    let result = unsafe {
-        load_and_run(&pdb, &mut region, core::ptr::null(), unreachable_jump)
-    };
+    let result = unsafe { load_and_run(&pdb, &mut region, core::ptr::null(), unreachable_jump) };
     assert!(
         matches!(result, Err(LoadAndRunError::PrepareImage(_))),
         "bad magic must return PrepareImage error"
@@ -50,10 +49,8 @@ fn load_and_run_returns_error_for_bad_magic_app_load_run() {
 #[test]
 fn load_and_run_returns_error_when_region_too_small_app_load_run() {
     let pdb = common::make_min_pdb(&[0u8; 64]); // image = 64 bytes
-    let mut region = vec![0u8; 8];               // region only 8 bytes — too small
-    let result = unsafe {
-        load_and_run(&pdb, &mut region, core::ptr::null(), unreachable_jump)
-    };
+    let mut region = vec![0u8; 8]; // region only 8 bytes — too small
+    let result = unsafe { load_and_run(&pdb, &mut region, core::ptr::null(), unreachable_jump) };
     assert!(
         matches!(result, Err(LoadAndRunError::PrepareImage(_))),
         "too-small region must return PrepareImage error"

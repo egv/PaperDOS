@@ -157,10 +157,6 @@ pub extern "C" fn pd_fs_closedir(handle: i32) -> i32 {
 /// # Safety
 /// `path` must point to at least `len` valid bytes;
 /// `stat_buf` must be valid for 12 bytes of writes.
-pub unsafe extern "C" fn pd_fs_stat(
-    _path: *const u8,
-    _len: usize,
-    _stat_buf: *mut u8,
-) -> i32 {
+pub unsafe extern "C" fn pd_fs_stat(_path: *const u8, _len: usize, _stat_buf: *mut u8) -> i32 {
     -1
 }

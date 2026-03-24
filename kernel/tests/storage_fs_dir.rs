@@ -9,10 +9,16 @@ fn fs_readdir_root_returns_two_entries_then_none_storage_fs_dir() {
     let mut fs = FsState::new(bd);
     let dh = fs.fs_opendir("").unwrap();
 
-    let e1 = fs.fs_readdir(dh).unwrap().expect("first entry should be present");
+    let e1 = fs
+        .fs_readdir(dh)
+        .unwrap()
+        .expect("first entry should be present");
     assert_eq!(e1.entry_type, EntryType::File); // README.TXT
 
-    let e2 = fs.fs_readdir(dh).unwrap().expect("second entry should be present");
+    let e2 = fs
+        .fs_readdir(dh)
+        .unwrap()
+        .expect("second entry should be present");
     assert_eq!(e2.entry_type, EntryType::Directory); // TESTDIR
 
     let e3 = fs.fs_readdir(dh).unwrap();

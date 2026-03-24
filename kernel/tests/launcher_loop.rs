@@ -10,8 +10,8 @@
 mod common;
 use common::InMemoryBlockDevice;
 
-use std::sync::{Mutex, MutexGuard};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, MutexGuard};
 
 use kernel::abi::{PD_BTN_DOWN, PD_BTN_OK};
 use kernel::launcher::run_launcher;
@@ -33,12 +33,18 @@ fn new_pdb_fs() -> FsState<InMemoryBlockDevice> {
     FsState::new(InMemoryBlockDevice::new(common::make_apps_fat16_image()))
 }
 
-fn select_immediately() -> u32 { PD_BTN_OK }
+fn select_immediately() -> u32 {
+    PD_BTN_OK
+}
 
 static DOWN_THEN_OK_IDX: AtomicUsize = AtomicUsize::new(0);
 fn down_then_ok() -> u32 {
     let n = DOWN_THEN_OK_IDX.fetch_add(1, Ordering::SeqCst);
-    if n == 0 { PD_BTN_DOWN } else { PD_BTN_OK }
+    if n == 0 {
+        PD_BTN_DOWN
+    } else {
+        PD_BTN_OK
+    }
 }
 
 #[test]
@@ -49,7 +55,11 @@ fn run_launcher_returns_pdb_filename_on_select_launcher_loop() {
     // SAFETY: single-threaded region guarded by GLOBAL_LOCK.
     unsafe { set_input_wait_button_fn(select_immediately) };
     let filename = run_launcher(&mut fs, &mut *buf);
-    assert_eq!(&filename[8..11], b"PDB", "selected filename must have PDB extension");
+    assert_eq!(
+        &filename[8..11],
+        b"PDB",
+        "selected filename must have PDB extension"
+    );
 }
 
 #[test]
@@ -61,5 +71,9 @@ fn run_launcher_down_then_select_picks_second_app_launcher_loop() {
     unsafe { set_input_wait_button_fn(down_then_ok) };
     let filename = run_launcher(&mut fs, &mut *buf);
     // After pressing DOWN once, the second app (WORLD.PDB) should be selected.
-    assert_eq!(&filename[0..5], b"WORLD", "DOWN then SELECT must pick second app");
+    assert_eq!(
+        &filename[0..5],
+        b"WORLD",
+        "DOWN then SELECT must pick second app"
+    );
 }

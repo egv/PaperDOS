@@ -18,11 +18,11 @@ use kernel::storage::sd::SdCard;
 fn make_csd_v2_reply() -> Vec<u8> {
     let mut csd = [0u8; 16];
     csd[0] = 0x40; // CSD_STRUCTURE = 01b
-    // C_SIZE = 0x3FF = 1023
+                   // C_SIZE = 0x3FF = 1023
     csd[7] = 0x00; // C_SIZE[21:16]
     csd[8] = 0x03; // C_SIZE[15:8]
     csd[9] = 0xFF; // C_SIZE[7:0]
-    // Response: 2 preamble 0xFF + R1=0x00 + 1 padding + token 0xFE + 16 CSD + 2 CRC
+                   // Response: 2 preamble 0xFF + R1=0x00 + 1 padding + token 0xFE + 16 CSD + 2 CRC
     let mut reply = vec![0xFF, 0xFF, 0x00, 0xFF, 0xFE];
     reply.extend_from_slice(&csd);
     reply.extend_from_slice(&[0x00, 0x00]); // dummy CRC
@@ -38,10 +38,10 @@ fn make_csd_v1_reply() -> Vec<u8> {
     let mut csd = [0u8; 16];
     // byte 0: CSD_STRUCTURE = 00b → bits [7:6] = 0x00
     csd[5] = 0x09; // READ_BL_LEN = 9 (bits [3:0])
-    // C_SIZE = 100 = 0x64 (12-bit at bits [73:62])
-    // byte 6 bits [1:0] = C_SIZE[11:10] = (0x64 >> 10) & 0x03 = 0
-    // byte 7            = C_SIZE[9:2]   = (0x64 >> 2) & 0xFF  = 0x19
-    // byte 8 bits [7:6] = C_SIZE[1:0]   = (0x64 & 0x03) << 6  = 0x00
+                   // C_SIZE = 100 = 0x64 (12-bit at bits [73:62])
+                   // byte 6 bits [1:0] = C_SIZE[11:10] = (0x64 >> 10) & 0x03 = 0
+                   // byte 7            = C_SIZE[9:2]   = (0x64 >> 2) & 0xFF  = 0x19
+                   // byte 8 bits [7:6] = C_SIZE[1:0]   = (0x64 & 0x03) << 6  = 0x00
     csd[7] = 0x19;
     // C_SIZE_MULT = 1 (3-bit at bits [49:47])
     // byte 9 bits [1:0] = C_SIZE_MULT[2:1] = (1 >> 1) & 0x03 = 0

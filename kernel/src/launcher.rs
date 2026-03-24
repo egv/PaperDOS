@@ -1,4 +1,5 @@
 use crate::abi::{PD_BTN_DOWN, PD_BTN_OK, PD_BTN_UP};
+use crate::device::serial::serial_write_bytes;
 use crate::storage::fs::{DirHandle, EntryType, FsState};
 use crate::storage::StorageError;
 use crate::syscall::display::pd_display_refresh;
@@ -246,6 +247,11 @@ where
         } else if buttons & PD_BTN_UP != 0 {
             state.move_up();
         } else if buttons & PD_BTN_OK != 0 && count > 0 {
+            let mut name = [0u8; 13];
+            let len = format_app_name(&apps[state.selected].filename, &mut name);
+            serial_write_bytes(b"APP:");
+            serial_write_bytes(&name[..len]);
+            serial_write_bytes(b"\n");
             return apps[state.selected].filename;
         }
 

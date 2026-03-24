@@ -37,5 +37,8 @@ fn fs_stubs_return_error_codes_syscall_fs() {
     assert_eq!(unsafe { pd_fs_opendir(core::ptr::null(), 0) }, -1);
     assert_eq!(unsafe { pd_fs_readdir(-1, core::ptr::null_mut()) }, -1);
     assert_eq!(pd_fs_closedir(-1), -1);
-    assert_eq!(unsafe { pd_fs_stat(core::ptr::null(), 0, core::ptr::null_mut()) }, -1);
+    assert_eq!(
+        unsafe { pd_fs_stat(core::ptr::null(), 0, core::ptr::null_mut()) },
+        -1
+    );
 }

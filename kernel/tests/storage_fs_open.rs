@@ -8,7 +8,9 @@ use kernel::storage::StorageError;
 fn fs_open_existing_file_returns_handle_storage_fs_open() {
     let bd = InMemoryBlockDevice::new(make_test_fat16_image());
     let mut fs = FsState::new(bd);
-    let handle = fs.fs_open("README.TXT", false).expect("open README.TXT should succeed");
+    let handle = fs
+        .fs_open("README.TXT", false)
+        .expect("open README.TXT should succeed");
     fs.fs_close(handle).expect("close should succeed");
 }
 
@@ -40,12 +42,17 @@ fn fs_open_all_slots_full_returns_error_storage_fs_open() {
     let bd = InMemoryBlockDevice::new(make_test_fat16_image());
     let mut fs = FsState::new(bd);
     let mut handles = Vec::new();
-    let names = ["F0.TXT", "F1.TXT", "F2.TXT", "F3.TXT", "F4.TXT", "F5.TXT", "F6.TXT", "F7.TXT"];
+    let names = [
+        "F0.TXT", "F1.TXT", "F2.TXT", "F3.TXT", "F4.TXT", "F5.TXT", "F6.TXT", "F7.TXT",
+    ];
     for &name in &names {
         handles.push(fs.fs_open(name, true).expect("should open within 8 slots"));
     }
     let result = fs.fs_open("F8.TXT", true);
-    assert!(result.is_err(), "9th open must fail when all file slots are occupied");
+    assert!(
+        result.is_err(),
+        "9th open must fail when all file slots are occupied"
+    );
     for h in handles {
         fs.fs_close(h).unwrap();
     }
