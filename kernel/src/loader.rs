@@ -1,4 +1,5 @@
 use crate::abi::PdSyscalls;
+use crate::device::serial::serial_write_bytes;
 use crate::pdb::{
     parse_fixed_header, payload_views, validate_header_identity, PdbError, PdbHeader,
 };
@@ -144,7 +145,9 @@ pub unsafe fn load_and_run(
 ) -> Result<(), LoadAndRunError> {
     let load_addr = region.as_ptr() as u32;
     let prepared = prepare_image(pdb, region, load_addr)?;
+    serial_write_bytes(b"LAUNCH:prepare\n");
     let entry = unsafe { region.as_ptr().add(prepared.entry_offset as usize) };
+    serial_write_bytes(b"LAUNCH:jump\n");
     unsafe { jump_fn(entry, syscalls) };
     Ok(())
 }
