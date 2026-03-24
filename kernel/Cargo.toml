@@ -24,8 +24,10 @@ embedded-sdmmc = { version = "0.7", default-features = false }
 
 [target.'cfg(all(target_arch = "riscv32", target_os = "none"))'.dependencies]
 embassy-executor = "0.9.0"
+critical-section = "1.2.0"
 embedded-hal-bus = "0.3.0"
 esp-bootloader-esp-idf = { version = "0.4.0", default-features = false, features = ["esp32c3", "esp-rom-sys"] }
 esp-hal = { version = "1.0.0", default-features = false, features = ["esp32c3", "rt", "unstable"] }
 esp-rtos = { version = "0.2.0", default-features = false, features = ["esp32c3", "embassy"] }
+nb = "1.1.0"
 static_cell = "2.1.0"

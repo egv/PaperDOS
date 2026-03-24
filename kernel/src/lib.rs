@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod abi;
+pub mod boot_app;
 pub mod boot;
 pub mod device;
 pub mod display;

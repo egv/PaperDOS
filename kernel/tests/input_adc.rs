@@ -1,7 +1,7 @@
 mod common;
 
 use common::ScriptedAdc;
-use kernel::input::adc::AdcSource;
+use kernel::input::adc::{trimmed_mean4, AdcSource};
 
 #[test]
 fn scripted_adc_returns_sequence_in_order_input_adc() {
@@ -26,4 +26,14 @@ fn scripted_adc_channels_are_independent_input_adc() {
     assert_eq!(adc.read_gpio2().unwrap(), 333);
     assert_eq!(adc.read_gpio1().unwrap(), 222);
     assert_eq!(adc.read_gpio2().unwrap(), 444);
+}
+
+#[test]
+fn trimmed_mean4_rejects_stale_first_sample_input_adc() {
+    assert_eq!(trimmed_mean4([3, 4095, 4095, 4095]), 4095);
+}
+
+#[test]
+fn trimmed_mean4_preserves_stable_button_reading_input_adc() {
+    assert_eq!(trimmed_mean4([2655, 2650, 2660, 2655]), 2655);
 }

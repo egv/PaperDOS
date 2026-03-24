@@ -16,12 +16,12 @@ pub fn button_id_to_mask(id: ButtonId) -> u32 {
 }
 
 /// Map a [`ButtonEvent`] to the `PD_BTN_*` bitmask of the underlying button.
-///
-/// Both `Tap` and `LongPress` events carry the button identity; the caller can
-/// distinguish them via the event type before calling this helper.
 pub fn button_event_to_mask(event: ButtonEvent) -> u32 {
     match event {
-        ButtonEvent::Tap(id) | ButtonEvent::LongPress(id) => button_id_to_mask(id),
+        ButtonEvent::Press(id)
+        | ButtonEvent::Release(id)
+        | ButtonEvent::LongPress(id)
+        | ButtonEvent::Repeat(id) => button_id_to_mask(id),
     }
 }
 

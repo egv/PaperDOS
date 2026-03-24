@@ -48,6 +48,12 @@ impl<SPI: SpiDevice> SdCard<SPI> {
             .transaction(&mut [Operation::Write(&[0xFF; 10])])
             .map_err(|_| StorageError::IoError)?;
 
+        self.init_after_preamble()
+    }
+
+    /// Run the SD SPI initialisation sequence after the host has already issued
+    /// the required 80+ power-up clocks with CS deasserted.
+    pub fn init_after_preamble(&mut self) -> Result<CardKind, StorageError> {
         // Step 2: CMD0 — GO_IDLE_STATE
         let r1 = self.cmd_r1(0, 0x00000000, 0x95)?;
         if r1 != 0x01 {
@@ -105,8 +111,10 @@ impl<SPI: SpiDevice> SdCard<SPI> {
             .map_err(|_| StorageError::IoError)?;
 
         // Locate R1 (first non-0xFF byte).
-        let r1_pos =
-            resp.iter().position(|&b| b != 0xFF).ok_or(StorageError::IoError)?;
+        let r1_pos = resp
+            .iter()
+            .position(|&b| b != 0xFF)
+            .ok_or(StorageError::IoError)?;
         if resp[r1_pos] != 0x00 {
             return Err(StorageError::IoError);
         }
@@ -129,18 +137,14 @@ impl<SPI: SpiDevice> SdCard<SPI> {
         if csd_structure == 1 {
             // CSD v2 (SDHC/SDXC): C_SIZE at bits [69:48].
             // Byte 7 bits [5:0] = C_SIZE[21:16], byte 8 = C_SIZE[15:8], byte 9 = C_SIZE[7:0].
-            let c_size = ((csd[7] as u32 & 0x3F) << 16)
-                | ((csd[8] as u32) << 8)
-                | (csd[9] as u32);
+            let c_size = ((csd[7] as u32 & 0x3F) << 16) | ((csd[8] as u32) << 8) | (csd[9] as u32);
             Ok((c_size + 1) * 1024)
         } else {
             // CSD v1 (SDSC): classic formula.
             let read_bl_len = csd[5] & 0x0F;
-            let c_size = (((csd[6] & 0x03) as u32) << 10)
-                | ((csd[7] as u32) << 2)
-                | ((csd[8] >> 6) as u32);
-            let c_size_mult =
-                (((csd[9] & 0x03) as u32) << 1) | ((csd[10] >> 7) as u32);
+            let c_size =
+                (((csd[6] & 0x03) as u32) << 10) | ((csd[7] as u32) << 2) | ((csd[8] >> 6) as u32);
+            let c_size_mult = (((csd[9] & 0x03) as u32) << 1) | ((csd[10] >> 7) as u32);
             let block_len = 1u32 << read_bl_len;
             let mult = 1u32 << (c_size_mult + 2);
             let blocknr = (c_size + 1) * mult;
@@ -166,7 +170,10 @@ impl<SPI: SpiDevice> SdCard<SPI> {
             .transaction(&mut [Operation::Write(&cmd), Operation::Read(&mut resp)])
             .map_err(|_| StorageError::IoError)?;
 
-        let r1_pos = resp.iter().position(|&b| b != 0xFF).ok_or(StorageError::IoError)?;
+        let r1_pos = resp
+            .iter()
+            .position(|&b| b != 0xFF)
+            .ok_or(StorageError::IoError)?;
         if resp[r1_pos] != 0x00 {
             return Err(StorageError::IoError);
         }
@@ -202,7 +209,11 @@ impl<SPI: SpiDevice> SdCard<SPI> {
         self.spi
             .transaction(&mut [Operation::Write(&send_buf), Operation::Read(&mut resp)])
             .map_err(|_| StorageError::IoError)?;
-        let token = resp.iter().find(|&&b| b != 0xFF).copied().ok_or(StorageError::IoError)?;
+        let token = resp
+            .iter()
+            .find(|&&b| b != 0xFF)
+            .copied()
+            .ok_or(StorageError::IoError)?;
         if (token & 0x0F) != 0x05 {
             return Err(StorageError::IoError);
         }
@@ -223,12 +234,9 @@ impl<SPI: SpiDevice> SdCard<SPI> {
     /// Send a command and return R1 (first non-0xFF byte within `resp_len` read bytes).
     fn cmd_r1(&mut self, cmd: u8, arg: u32, crc: u8) -> Result<u8, StorageError> {
         let cmd_bytes = build_cmd(cmd, arg, crc);
-        let mut resp = [0xFFu8; 3];
+        let mut resp = [0xFFu8; 10];
         self.spi
-            .transaction(&mut [
-                Operation::Write(&cmd_bytes),
-                Operation::Read(&mut resp),
-            ])
+            .transaction(&mut [Operation::Write(&cmd_bytes), Operation::Read(&mut resp)])
             .map_err(|_| StorageError::IoError)?;
         resp.iter()
             .find(|&&b| b != 0xFF)
@@ -239,12 +247,9 @@ impl<SPI: SpiDevice> SdCard<SPI> {
     /// Send a command and return R7/R3 response as [R1, byte1, byte2, byte3, byte4].
     fn cmd_r7(&mut self, cmd: u8, arg: u32, crc: u8) -> Result<[u8; 5], StorageError> {
         let cmd_bytes = build_cmd(cmd, arg, crc);
-        let mut resp = [0xFFu8; 7];
+        let mut resp = [0xFFu8; 16];
         self.spi
-            .transaction(&mut [
-                Operation::Write(&cmd_bytes),
-                Operation::Read(&mut resp),
-            ])
+            .transaction(&mut [Operation::Write(&cmd_bytes), Operation::Read(&mut resp)])
             .map_err(|_| StorageError::IoError)?;
         let pos = resp
             .iter()
@@ -253,7 +258,13 @@ impl<SPI: SpiDevice> SdCard<SPI> {
         if pos + 4 >= resp.len() {
             return Err(StorageError::IoError);
         }
-        Ok([resp[pos], resp[pos + 1], resp[pos + 2], resp[pos + 3], resp[pos + 4]])
+        Ok([
+            resp[pos],
+            resp[pos + 1],
+            resp[pos + 2],
+            resp[pos + 3],
+            resp[pos + 4],
+        ])
     }
 }
 

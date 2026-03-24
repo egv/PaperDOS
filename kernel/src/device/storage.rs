@@ -5,38 +5,43 @@
 #[cfg(all(target_arch = "riscv32", target_os = "none"))]
 mod imp {
     use embedded_hal_bus::spi::CriticalSectionDevice;
-    use esp_hal::spi::master::Spi;
+    use embedded_sdmmc::sdcard::DummyCsPin;
+    use embedded_sdmmc::SdCard as RuntimeSdCard;
+    use esp_hal::spi::master::SpiDmaBus;
     use esp_hal::Blocking;
 
-    use crate::storage::block::SdBlockDevice;
+    use crate::device::raw_gpio::RawOutputPin;
     use crate::storage::fs::FsState;
-    use crate::storage::sd::SdCard;
     use crate::storage::StorageError;
 
     /// SPI device type for the SD card on the shared SPI2 bus.
     ///
-    /// `CS` — chip-select output pin; `D` — delay provider.
-    pub type SdSpiDevice<'a, CS, D> = CriticalSectionDevice<'a, Spi<'static, Blocking>, CS, D>;
+    /// Uses `DummyCsPin` because `embedded_sdmmc::SdCard` drives the real SD CS
+    /// line itself to satisfy the SPI-mode card spec.
+    pub type SdSpiDevice<'a, D> =
+        CriticalSectionDevice<'a, SpiDmaBus<'static, Blocking>, DummyCsPin, D>;
 
-    impl<CS, D> FsState<SdBlockDevice<SdSpiDevice<'static, CS, D>>>
+    pub type RuntimeSdFs<D> = FsState<RuntimeSdCard<SdSpiDevice<'static, D>, RawOutputPin, D>>;
+
+    impl<D> RuntimeSdFs<D>
     where
-        CS: embedded_hal::digital::OutputPin + 'static,
         D: embedded_hal::delay::DelayNs + 'static,
     {
         /// Construct an [`FsState`] from a shared SPI2 device.
         ///
-        /// Runs the SD card SPI initialisation sequence, reads the card
-        /// capacity from the CSD register (CMD9), and returns a ready
-        /// filesystem state on success.
-        pub fn from_spi2(spi_dev: SdSpiDevice<'static, CS, D>) -> Result<Self, StorageError> {
-            let mut sd = SdCard::new(spi_dev);
-            sd.init()?;
-            let block_count = sd.read_capacity()?;
-            let bd = SdBlockDevice::new(sd, block_count);
-            Ok(Self::new(bd))
+        /// Uses `embedded_sdmmc`'s own SD SPI driver, which matches the
+        /// working pulp-os wiring model and manages the real CS pin directly.
+        pub fn from_spi2(
+            spi_dev: SdSpiDevice<'static, D>,
+            cs: RawOutputPin,
+            delay: D,
+        ) -> Result<Self, StorageError> {
+            let sd = RuntimeSdCard::new(spi_dev, cs, delay);
+            sd.num_bytes().map_err(|_| StorageError::IoError)?;
+            Ok(Self::new(sd))
         }
     }
 }
 
 #[cfg(all(target_arch = "riscv32", target_os = "none"))]
-pub use imp::SdSpiDevice;
+pub use imp::{RuntimeSdFs, SdSpiDevice};

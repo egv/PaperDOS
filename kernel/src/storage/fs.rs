@@ -1,8 +1,8 @@
+use embedded_sdmmc::filesystem::ToShortFileName;
 use embedded_sdmmc::{
     BlockDevice, Mode, RawDirectory, RawFile, RawVolume, ShortFileName, TimeSource, Timestamp,
     VolumeIdx, VolumeManager,
 };
-use embedded_sdmmc::filesystem::ToShortFileName;
 
 /// Seek origin, mirroring `std::io::SeekFrom`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,12 +60,38 @@ impl TimeSource for NoopTimeSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileHandle(pub(crate) u8);
 
+impl FileHandle {
+    pub fn from_raw(raw: i32) -> Option<Self> {
+        if raw < 0 || raw > u8::MAX as i32 {
+            return None;
+        }
+        Some(Self(raw as u8))
+    }
+
+    pub fn to_raw(self) -> i32 {
+        self.0 as i32
+    }
+}
+
 /// Opaque index into the open-directory slot table.
 ///
 /// The inner slot index is intentionally private; callers should treat this as
 /// an opaque token and not inspect or construct it directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DirHandle(pub(crate) u8);
+
+impl DirHandle {
+    pub fn from_raw(raw: i32) -> Option<Self> {
+        if raw < 0 || raw > u8::MAX as i32 {
+            return None;
+        }
+        Some(Self(raw as u8))
+    }
+
+    pub fn to_raw(self) -> i32 {
+        self.0 as i32
+    }
+}
 
 /// A single directory entry returned by [`FsState::fs_readdir`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +152,10 @@ where
             return Ok(d);
         }
         let vol = self.ensure_volume()?;
-        let d = self.vm.open_root_dir(vol).map_err(|_| StorageError::NotReady)?;
+        let d = self
+            .vm
+            .open_root_dir(vol)
+            .map_err(|_| StorageError::NotReady)?;
         self.root_dir = Some(d);
         Ok(d)
     }
@@ -142,7 +171,11 @@ where
     /// to zero length if it exists.  There is no append mode.
     pub fn fs_open(&mut self, path: &str, write: bool) -> Result<FileHandle, StorageError> {
         let dir = self.ensure_root_dir()?;
-        let mode = if write { Mode::ReadWriteCreateOrTruncate } else { Mode::ReadOnly };
+        let mode = if write {
+            Mode::ReadWriteCreateOrTruncate
+        } else {
+            Mode::ReadOnly
+        };
         let raw_file = self.vm.open_file_in_dir(dir, path, mode).map_err(|e| {
             use embedded_sdmmc::Error as E;
             match e {
@@ -169,7 +202,9 @@ where
             .get_mut(handle.0 as usize)
             .and_then(|s| s.take())
             .ok_or(StorageError::NotFound)?;
-        self.vm.close_file(raw_file).map_err(|_| StorageError::IoError)
+        self.vm
+            .close_file(raw_file)
+            .map_err(|_| StorageError::IoError)
     }
 
     fn raw_file(&self, handle: FileHandle) -> Result<RawFile, StorageError> {
@@ -230,7 +265,10 @@ where
                     } else {
                         EntryType::File
                     };
-                    found = Some(PdStat { entry_type, size: entry.size });
+                    found = Some(PdStat {
+                        entry_type,
+                        size: entry.size,
+                    });
                 }
             })
             .map_err(|_| StorageError::IoError)?;
@@ -240,7 +278,9 @@ where
     /// Create a new subdirectory in the root directory.
     pub fn fs_mkdir(&mut self, name: &str) -> Result<(), StorageError> {
         let dir = self.ensure_root_dir()?;
-        self.vm.make_dir_in_dir(dir, name).map_err(|_| StorageError::IoError)
+        self.vm
+            .make_dir_in_dir(dir, name)
+            .map_err(|_| StorageError::IoError)
     }
 
     /// Delete a file from the root directory.
@@ -263,7 +303,9 @@ where
     pub fn fs_opendir(&mut self, path: &str) -> Result<DirHandle, StorageError> {
         let raw_dir = if path.is_empty() {
             let vol = self.ensure_volume()?;
-            self.vm.open_root_dir(vol).map_err(|_| StorageError::NotReady)?
+            self.vm
+                .open_root_dir(vol)
+                .map_err(|_| StorageError::NotReady)?
         } else {
             let root = self.ensure_root_dir()?;
             self.vm.open_dir(root, path).map_err(|e| {
@@ -319,7 +361,11 @@ where
                     let ext = entry.name.extension();
                     name[..base.len()].copy_from_slice(base);
                     name[8..8 + ext.len()].copy_from_slice(ext);
-                    found = Some(PdDirEntry { name, entry_type, size: entry.size });
+                    found = Some(PdDirEntry {
+                        name,
+                        entry_type,
+                        size: entry.size,
+                    });
                 }
                 count += 1;
             })
@@ -342,6 +388,8 @@ where
             .get_mut(handle.0 as usize)
             .and_then(|s| s.take())
             .ok_or(StorageError::NotFound)?;
-        self.vm.close_dir(raw_dir).map_err(|_| StorageError::IoError)
+        self.vm
+            .close_dir(raw_dir)
+            .map_err(|_| StorageError::IoError)
     }
 }

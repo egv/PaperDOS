@@ -14,87 +14,37 @@ pub const DISPLAY_BUSY_PIN: u8 = 6;
 #[cfg(all(target_arch = "riscv32", target_os = "none"))]
 mod imp {
     use crate::display::transport::DisplayTransport;
-    use esp_hal::dma::{DmaChannelFor, DmaDescriptor, DmaRxBuf, DmaTxBuf};
+    use embedded_hal::spi::{Operation, SpiDevice};
     use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig};
-    use esp_hal::spi::master::{AnySpi, Config, Instance, Spi, SpiDmaBus};
-    use esp_hal::spi::Mode;
-    use esp_hal::time::Rate;
-    use esp_hal::Blocking;
-    use static_cell::StaticCell;
 
-    static TX_DESC: StaticCell<[DmaDescriptor; 2]> = StaticCell::new();
-    static RX_DESC: StaticCell<[DmaDescriptor; 2]> = StaticCell::new();
-    static TX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
-    static RX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
-    const DMA_CHUNK_BYTES: usize = 4096;
-
-    /// SSD1677 display transport backed by DMA-accelerated SPI2 and four GPIO lines.
-    pub struct X4DisplayTransport {
-        spi: SpiDmaBus<'static, Blocking>,
-        cs: Output<'static>,
+    /// SSD1677 display transport backed by an SPI device and three GPIO lines.
+    pub struct X4DisplayTransport<SPI> {
+        spi: SPI,
         dc: Output<'static>,
         rst: Output<'static>,
         busy: Input<'static>,
     }
 
-    impl X4DisplayTransport {
-        /// Construct the display transport from raw peripherals.
-        ///
-        /// `spi2`     — SPI2 peripheral.
-        /// `dma_ch0`  — DMA channel for SPI transfers.
-        /// `sclk/mosi/cs` — SPI signal pins.
-        /// `dc_pin`   — data/command select (high = data).
-        /// `rst_pin`  — active-low hardware reset.
-        /// `busy_pin` — BUSY signal from the controller (high = busy).
+    impl<SPI> X4DisplayTransport<SPI> {
+        /// Construct the display transport from a configured SPI device.
         pub fn new(
-            spi2: impl Instance + 'static,
-            dma_ch0: impl DmaChannelFor<AnySpi<'static>> + 'static,
-            sclk: impl esp_hal::gpio::OutputPin + 'static,
-            mosi: impl esp_hal::gpio::OutputPin + 'static,
-            cs: impl esp_hal::gpio::OutputPin + 'static,
+            spi: SPI,
             dc_pin: impl esp_hal::gpio::OutputPin + 'static,
             rst_pin: impl esp_hal::gpio::OutputPin + 'static,
             busy_pin: impl esp_hal::gpio::InputPin + 'static,
         ) -> Self {
-            let tx_buf = DmaTxBuf::new(
-                TX_DESC.init([DmaDescriptor::EMPTY; 2]),
-                TX_BUF.init([0u8; 4096]),
-            )
-            .unwrap();
-            let rx_buf = DmaRxBuf::new(
-                RX_DESC.init([DmaDescriptor::EMPTY; 2]),
-                RX_BUF.init([0u8; 4096]),
-            )
-            .unwrap();
-
-            let spi = Spi::new(
-                spi2,
-                Config::default()
-                    .with_frequency(Rate::from_mhz(10))
-                    .with_mode(Mode::_0),
-            )
-            .unwrap()
-            .with_sck(sclk)
-            .with_mosi(mosi)
-            .with_dma(dma_ch0)
-            .with_buffers(rx_buf, tx_buf);
-
-            let cs = Output::new(cs, Level::High, OutputConfig::default());
             let dc = Output::new(dc_pin, Level::High, OutputConfig::default());
             let rst = Output::new(rst_pin, Level::High, OutputConfig::default());
             let busy = Input::new(busy_pin, InputConfig::default());
 
-            Self {
-                spi,
-                cs,
-                dc,
-                rst,
-                busy,
-            }
+            Self { spi, dc, rst, busy }
         }
     }
 
-    impl DisplayTransport for X4DisplayTransport {
+    impl<SPI> DisplayTransport for X4DisplayTransport<SPI>
+    where
+        SPI: SpiDevice,
+    {
         type Error = ();
 
         fn reset(&mut self) -> Result<(), ()> {
@@ -128,24 +78,16 @@ mod imp {
         }
 
         fn write_command(&mut self, command: u8) -> Result<(), ()> {
+            let cmd = [command];
+            let mut ops = [Operation::Write(&cmd)];
             self.dc.set_low();
-            self.cs.set_low();
-            let result = self.spi.write(&[command]).map_err(|_| ());
-            self.cs.set_high();
-            result
+            self.spi.transaction(&mut ops).map_err(|_| ())
         }
 
         fn write_data(&mut self, data: &[u8]) -> Result<(), ()> {
+            let mut ops = [Operation::Write(data)];
             self.dc.set_high();
-            self.cs.set_low();
-            for chunk in data.chunks(DMA_CHUNK_BYTES) {
-                if self.spi.write(chunk).is_err() {
-                    self.cs.set_high();
-                    return Err(());
-                }
-            }
-            self.cs.set_high();
-            Ok(())
+            self.spi.transaction(&mut ops).map_err(|_| ())
         }
     }
 }

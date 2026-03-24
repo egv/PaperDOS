@@ -32,6 +32,12 @@ fn logical_row_is(buf: &FrameBuffer, y: usize, expected: u8) -> bool {
     (0..PD_SCREEN_WIDTH as usize).all(|x| logical_pixel_is(buf, x, y, expected))
 }
 
+fn logical_row_sample(buf: &FrameBuffer, y: usize) -> Vec<bool> {
+    (0..PD_SCREEN_WIDTH as usize)
+        .map(|x| logical_pixel_is(buf, x, y, 0xFF))
+        .collect()
+}
+
 #[test]
 fn render_launcher_zero_apps_all_white_launcher_render() {
     let mut buf = zero_buf();
@@ -91,4 +97,42 @@ fn render_launcher_highlight_height_matches_constant_launcher_render() {
         logical_row_is(&buf, first_white, 0xFF),
         "row after highlight must be white"
     );
+}
+
+#[test]
+fn render_launcher_draws_distinct_filename_rows_launcher_render() {
+    let mut buf = zero_buf();
+    let apps = [
+        AppInfo {
+            filename: *b"HELLO   PDB",
+        },
+        AppInfo {
+            filename: *b"WORLD   PDB",
+        },
+        AppInfo {
+            filename: *b"THIRD   PDB",
+        },
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+        AppInfo::default(),
+    ];
+    let state = LauncherState::new(3);
+
+    render_launcher(&mut *buf, &apps[..3], &state);
+
+    let y0 = 12usize;
+    let y1 = y0 + LAUNCHER_ROW_HEIGHT as usize;
+    let y2 = y1 + LAUNCHER_ROW_HEIGHT as usize;
+    assert_ne!(logical_row_sample(&buf, y1), logical_row_sample(&buf, y2));
+    assert_ne!(logical_row_sample(&buf, y0), logical_row_sample(&buf, y1));
 }

@@ -11,7 +11,12 @@ pub struct DebounceFilter {
 
 impl DebounceFilter {
     pub fn new(threshold_ticks: u32) -> Self {
-        Self { stable: None, candidate: None, ticks: 0, threshold_ticks }
+        Self {
+            stable: None,
+            candidate: None,
+            ticks: 0,
+            threshold_ticks,
+        }
     }
 
     /// Feed one raw reading. Returns the current stable state after this tick.

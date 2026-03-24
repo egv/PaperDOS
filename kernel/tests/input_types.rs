@@ -12,14 +12,14 @@ fn button_id_variants_input_types() {
 
 #[test]
 fn button_event_variants_input_types() {
-    let tap = ButtonEvent::Tap(ButtonId::Up);
+    let tap = ButtonEvent::Press(ButtonId::Up);
     let lp = ButtonEvent::LongPress(ButtonId::Up);
     assert_ne!(tap, lp);
 }
 
 #[test]
 fn button_event_copy_input_types() {
-    let e = ButtonEvent::Tap(ButtonId::Select);
+    let e = ButtonEvent::Press(ButtonId::Select);
     let e2 = e;
     assert_eq!(e, e2);
 }
