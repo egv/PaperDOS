@@ -1,5 +1,5 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
-use kernel::device::serial::{serial_write_bytes, set_serial_write_fn};
+use kernel::device::serial::{serial_write_bytes, serial_write_fmt, set_serial_write_fn};
 
 static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
 static BYTE_SUM: AtomicUsize = AtomicUsize::new(0);
@@ -27,6 +27,19 @@ fn serial_write_routes_through_installed_fn_serial_write() {
         CALL_COUNT.load(Ordering::SeqCst),
         before + 1,
         "serial_write_bytes must invoke the installed fn exactly once"
+    );
+}
+
+#[test]
+fn serial_write_fmt_routes_formatted_serial_write() {
+    // SAFETY: same binary; fn is idempotent.
+    unsafe { set_serial_write_fn(recording_write) };
+
+    let before = CALL_COUNT.load(Ordering::SeqCst);
+    serial_write_fmt(format_args!("panic at {}:{}", "src/main.rs", 42u32));
+    assert!(
+        CALL_COUNT.load(Ordering::SeqCst) > before,
+        "serial_write_fmt must route through the installed fn"
     );
 }
 
