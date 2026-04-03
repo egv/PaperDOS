@@ -16,6 +16,7 @@ use kernel::syscall::build_syscall_table;
 
 // ── Stage-detection globals ───────────────────────────────────────────────────
 
+static SAW_CONFIRM: AtomicBool = AtomicBool::new(false);
 static SAW_SELECT: AtomicBool = AtomicBool::new(false);
 static SAW_OPEN: AtomicBool = AtomicBool::new(false);
 static SAW_READ: AtomicBool = AtomicBool::new(false);
@@ -24,7 +25,9 @@ static SAW_JUMP: AtomicBool = AtomicBool::new(false);
 static JUMP_FN_CALLED: AtomicBool = AtomicBool::new(false);
 
 fn stage_recording_write(bytes: &[u8]) {
-    if bytes == b"LAUNCH:select\n" {
+    if bytes == b"LAUNCH:confirm\n" {
+        SAW_CONFIRM.store(true, Ordering::SeqCst);
+    } else if bytes == b"LAUNCH:select\n" {
         SAW_SELECT.store(true, Ordering::SeqCst);
     } else if bytes == b"LAUNCH:open\n" {
         SAW_OPEN.store(true, Ordering::SeqCst);
@@ -49,6 +52,7 @@ fn all_stages_logged_for_valid_pdb_launcher_stages() {
     // SAFETY: called once per test binary; no concurrent writer.
     unsafe { set_serial_write_fn(stage_recording_write) };
 
+    SAW_CONFIRM.store(false, Ordering::SeqCst);
     SAW_SELECT.store(false, Ordering::SeqCst);
     SAW_OPEN.store(false, Ordering::SeqCst);
     SAW_READ.store(false, Ordering::SeqCst);
@@ -77,6 +81,10 @@ fn all_stages_logged_for_valid_pdb_launcher_stages() {
     assert!(
         JUMP_FN_CALLED.load(Ordering::SeqCst),
         "jump function must be called"
+    );
+    assert!(
+        SAW_CONFIRM.load(Ordering::SeqCst),
+        "LAUNCH:confirm must be logged"
     );
     assert!(
         SAW_SELECT.load(Ordering::SeqCst),
@@ -112,6 +120,7 @@ fn dry_run_loads_without_calling_jump_launcher_stages() {
     // SAFETY: idempotent; same fn as the other test.
     unsafe { set_serial_write_fn(stage_recording_write) };
 
+    SAW_CONFIRM.store(false, Ordering::SeqCst);
     SAW_SELECT.store(false, Ordering::SeqCst);
     SAW_PREPARE.store(false, Ordering::SeqCst);
     SAW_JUMP.store(false, Ordering::SeqCst);
@@ -134,6 +143,10 @@ fn dry_run_loads_without_calling_jump_launcher_stages() {
     };
 
     assert!(result.is_ok(), "dry-run must succeed: {result:?}");
+    assert!(
+        SAW_CONFIRM.load(Ordering::SeqCst),
+        "LAUNCH:confirm must be logged in dry-run"
+    );
     assert!(
         SAW_SELECT.load(Ordering::SeqCst),
         "LAUNCH:select must be logged in dry-run"
