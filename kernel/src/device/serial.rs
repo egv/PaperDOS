@@ -27,6 +27,31 @@ pub fn serial_write_fmt(args: fmt::Arguments<'_>) {
     let _ = SerialWriter.write_fmt(args);
 }
 
+/// Emit a deterministic panic report to the serial console.
+///
+/// The output format is stable and line-oriented:
+/// - `!!! PANIC !!!`
+/// - `LOC:<file>:<line>:<column>` (or `LOC:<unknown>`)
+/// - `MSG:<message>`
+pub fn serial_write_panic_report(location: Option<(&str, u32, u32)>, message: fmt::Arguments<'_>) {
+    serial_write_bytes(b"\r\n!!! PANIC !!!\r\n");
+    match location {
+        Some((file, line, column)) => {
+            serial_write_fmt(format_args!("LOC:{}:{}:{}\r\n", file, line, column));
+        }
+        None => serial_write_bytes(b"LOC:<unknown>\r\n"),
+    }
+    serial_write_fmt(format_args!("MSG:{}\r\n", message));
+}
+
+/// Format a panic using [`core::panic::PanicInfo`] and emit it to serial.
+pub fn serial_write_panic_info(info: &core::panic::PanicInfo<'_>) {
+    let location = info
+        .location()
+        .map(|loc| (loc.file(), loc.line(), loc.column()));
+    serial_write_panic_report(location, format_args!("{}", info.message()));
+}
+
 /// Register the byte-write callback for the serial console.
 ///
 /// # Safety
