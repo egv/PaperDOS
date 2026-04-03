@@ -34,7 +34,7 @@ mod device {
     use kernel::device::display::X4DisplayTransport;
     use kernel::device::raw_gpio::RawOutputPin;
     use kernel::device::serial::{
-        serial_write_bytes, serial_write_panic_info, set_serial_write_fn,
+        serial_write_panic_info, set_serial_write_fn,
     };
     use kernel::device::storage::{RuntimeSdFs, SdSpiDevice};
     use kernel::display::ssd1677::{
@@ -514,7 +514,6 @@ mod device {
 
             loop {
                 let filename = run_launcher_with_refresh(fs, launcher_buf, device_refresh_frame);
-                serial_write_bytes(b"LAUNCH:confirm\n");
                 let syscalls =
                     build_syscall_table(app_region.as_ptr() as u32, app_region.len() as u32);
                 let mode = if LAUNCH_DRY_RUN {

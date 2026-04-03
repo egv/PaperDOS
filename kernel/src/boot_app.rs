@@ -61,6 +61,7 @@ pub unsafe fn load_and_run<D: BlockDevice>(
 where
     D::Error: core::fmt::Debug,
 {
+    serial_write_bytes(b"LAUNCH:confirm\n");
     serial_write_bytes(b"LAUNCH:select\n");
     let size = load_pdb(fs, filename, pdb_buf)?;
     let jump_fn: unsafe fn(*const u8, *const PdSyscalls) = match mode {
