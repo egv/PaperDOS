@@ -33,7 +33,9 @@ mod device {
     use kernel::boot_app::{load_and_run, JumpMode};
     use kernel::device::display::X4DisplayTransport;
     use kernel::device::raw_gpio::RawOutputPin;
-    use kernel::device::serial::{serial_write_bytes, serial_write_fmt, set_serial_write_fn};
+    use kernel::device::serial::{
+        serial_write_bytes, serial_write_panic_info, set_serial_write_fn,
+    };
     use kernel::device::storage::{RuntimeSdFs, SdSpiDevice};
     use kernel::display::ssd1677::{
         emit_addressing_init_block, emit_power_init_block, emit_reset_preamble,
@@ -433,8 +435,7 @@ mod device {
 
     #[panic_handler]
     fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
-        serial_write_bytes(b"\r\n!!! PANIC !!!\r\n");
-        serial_write_fmt(format_args!("{}\r\n", info));
+        serial_write_panic_info(info);
         loop {
             spin_loop();
         }
